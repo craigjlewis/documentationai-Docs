@@ -1,0 +1,128 @@
+---
+title: Quickstart Guide
+description: Get up and running with CJL_Org by setting up your account and creating your first documentation space in under 5 minutes.
+---
+
+## Prerequisites
+
+<Callout kind="info" title="Before You Begin">
+Ensure you have:
+- A valid email address for account registration
+- A modern web browser like Chrome, Firefox, or Safari
+- Optional: GitHub or GitLab account for version control integration
+</Callout>
+
+CJL_Org provides a streamlined onboarding process. Complete account setup and your first workspace in minutes.
+
+## Sign Up for an Account
+
+Follow these steps to create your CJL_Org account.
+
+<Steps>
+  <Step title="Visit the Dashboard" icon="monitor">
+    Navigate to `https://dashboard.cjlorg.com` in your browser.
+  </Step>
+  <Step title="Register" icon="user-plus">
+    Click **Sign Up** and enter your email, name, and password.
+    
+    <Callout kind="tip">
+      Use a strong password with at least 12 characters.
+    </Callout>
+  </Step>
+  <Step title="Verify Email" icon="mail">
+    Check your inbox for the verification email and click the link.
+  </Step>
+  <Step title="Complete Onboarding" icon="check-circle">
+    Set your workspace preferences and start the tour.
+  </Step>
+</Steps>
+
+## Create Your First Documentation Workspace
+
+Once logged in, create a workspace to organize your docs.
+
+<Steps>
+  <Step title="New Workspace" icon="plus">
+    Click **New Workspace** in the dashboard.
+  </Step>
+  <Step title="Configure Settings" icon="settings">
+    Enter a name like `My Project Docs`, select visibility (public/private), and choose a template.
+  </Step>
+  <Step title="Save and Access" icon="save">
+    Your workspace is ready at `https://docs.cjlorg.com/my-project-docs`.
+  </Step>
+</Steps>
+
+## Upload Your Initial Documents
+
+Add content to your workspace using these methods.
+
+<Tabs>
+  <Tab title="Drag & Drop" icon="upload">
+    Drag files directly into the editor. Supports Markdown, PDFs, and images.
+  </Tab>
+  <Tab title="Git Import" icon="git-branch">
+    Connect your repo:
+    
+````bash
+git remote add cjlorg https://git.cjlorg.com/my-project.git
+git push cjlorg main
+````
+  </Tab>
+  <Tab title="API Upload" icon="api">
+    Use the upload endpoint:
+    
+    <CodeGroup tabs="cURL,JavaScript">
+```bash
+curl -X POST https://api.example.com/v1/workspaces/my-project-docs/documents \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -F "file=@document.md"
+```
+```javascript
+const formData = new FormData();
+formData.append('file', documentFile);
+
+fetch('https://api.example.com/v1/workspaces/my-project-docs/documents', {
+  method: 'POST',
+  headers: { 'Authorization': 'Bearer YOUR_API_KEY' },
+  body: formData
+});
+```
+    </CodeGroup>
+  </Tab>
+</Tabs>
+
+## Basic Interface Tour
+
+Explore the main features with this overview.
+
+<Columns cols={3}>
+  <Card title="Editor" icon="edit-3" href="#editor">
+    Real-time Markdown editor with live preview.
+  </Card>
+  <Card title="Version Control" icon="git-branch" href="#versions">
+    Track changes with Git integration.
+  </Card>
+  <Card title="Search" icon="search" href="#search">
+    Full-text search across all documents.
+  </Card>
+</Columns>
+
+<Expandable title="Advanced Features" default-open="false">
+  Customize themes, enable comments, and set permissions for collaborators.
+</Expandable>
+
+## Next Steps
+
+<Callout kind="success">
+  Congratulations! Your CJL_Org workspace is live. Dive deeper with these resources.
+</Callout>
+
+<Columns cols={2}>
+  <Card title="Authentication" icon="shield" href="/authentication">
+    Secure your workspace with API keys and OAuth.
+  </Card>
+  <Card title="Customization" icon="palette" href="/configuration">
+    Configure themes and integrations.
+  </Card>
+</Columns>

@@ -1,0 +1,118 @@
+---
+title: Changelog
+description: Stay updated with the latest releases, features, and improvements in CJL_Org.
+---
+
+## Recent Updates
+
+<Callout kind="info">
+  Check this changelog regularly to stay informed about new features, bug fixes, and improvements. Each release includes detailed notes on changes that affect your projects and documentation workflows.
+</Callout>
+
+<Update label="2024-10-15" description="v1.2.0" tags={["feature", "improvement"]}>
+## New Features
+
+- Added real-time collaboration tools for team documentation editing
+- Introduced version history with diff viewer for tracking changes
+
+## Improvements
+
+- Enhanced search with fuzzy matching and advanced filters
+- Optimized performance for large documentation spaces
+
+## Bug Fixes
+
+- Fixed sync issues in multi-user editing sessions
+- Resolved export failures for complex markdown files
+</Update>
+
+<Update label="2024-09-20" description="v1.1.0" tags={["improvement", "bugfix"]}>
+## New Features
+
+- Improved search capabilities with full-text indexing across projects
+- Added custom tags and categorization for better organization
+
+## Improvements
+
+- Streamlined project import from GitHub repositories
+- Better mobile responsiveness for documentation previews
+
+## Bug Fixes
+
+- Corrected permission errors in shared spaces
+- Fixed rendering glitches for embedded code blocks
+</Update>
+
+<Update label="2024-08-10" description="v1.0.0" tags={["feature", "breaking"]}>
+## New Features
+
+- Initial platform launch with core documentation management
+- Project organization tools including folders and permissions
+- Basic markdown editor with live preview
+
+## Breaking Changes
+
+- Updated configuration schema - migrate your settings using the upgrade guide
+
+## Bug Fixes
+
+- Initial stability improvements for core workflows
+</Update>
+
+## Upgrading to the Latest Version
+
+Follow these steps to upgrade your CJL_Org instance safely.
+
+<Steps>
+  <Step title="Backup Your Data" icon="database">
+    Create a full backup of your documentation spaces.
+
+````bash
+cjl-org backup --all-spaces --output=/path/to/backup
+````
+  </Step>
+  <Step title="Update Package" icon="download">
+    Install the latest version using your preferred method.
+
+    <CodeGroup tabs="npm,yarn">
+````bash
+npm install cjl-org@latest
+````
+````bash
+yarn add cjl-org@latest
+````
+    </CodeGroup>
+  </Step>
+  <Step title="Run Migrations" icon="settings">
+    Apply database migrations if applicable.
+
+````bash
+cjl-org migrate --env=production
+````
+  </Step>
+  <Step title="Restart Service" icon="refresh-cw">
+    Restart your CJL_Org service to apply changes.
+
+````bash
+systemctl restart cjl-org
+````
+  </Step>
+</Steps>
+
+<Callout kind="tip">
+  After upgrading, review the [migration guide](https://docs.example.com/migration) for any manual steps specific to your setup.
+</Callout>
+
+## Next Steps
+
+<Columns cols={3}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get started with CJL_Org in minutes.
+  </Card>
+  <Card title="Authentication" icon="lock" href="/authentication">
+    Secure your documentation spaces.
+  </Card>
+  <Card title="Guides" icon="book-open" href="/guides">
+    Explore advanced usage patterns.
+  </Card>
+</Columns>
