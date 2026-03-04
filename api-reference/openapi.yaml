@@ -414,7 +414,6 @@ components:
             - $ref: '#/components/schemas/TradingContextInput'
           nullable: true
           description: Optional trading context information to enrich the report.
-      required: []
     SyncFXReportResponse:
       type: object
       description: Response returned when an FX BrowserAct report is generated synchronously.
