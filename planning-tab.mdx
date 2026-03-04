@@ -1,0 +1,122 @@
+---
+title: Planning tab guide
+description: Understand the Planning sidebar group, its routes, backing React pages, and how to debug or add new planning tools in the trading app.
+---
+
+## Planning sidebar overview
+
+The Planning section groups tools for designing trades, sizing positions, and managing portfolio and risk workflows.
+
+<Callout kind="info">
+
+The sidebar group uses id `planning` with title `PLANNING` in the navigation configuration. Routes for this group live in `frontend/src/App.tsx`, which wires React pages under `/trading-planner`, `/position-sizing`, `/portfolio-optimization`, `/risk-metrics`, and `/advanced-risk-management`. The app persists open sidebar groups in the `localStorage` key `sidebar-expanded-sections`, so expand or collapse `PLANNING` from the UI or clear that key when debugging sidebar state.
+
+</Callout>
+
+## Routes and page components
+
+The Planning group contains these routes and corresponding page components:
+
+- **Trading Planner**
+  - Route: `/trading-planner`
+  - React page: `frontend/src/pages/TradingPlanner.tsx`
+- **Position Sizing**
+  - Route: `/position-sizing`
+  - React page: `frontend/src/pages/PositionSizing.tsx`
+- **Portfolio Optimization**
+  - Route: `/portfolio-optimization`
+  - React page: `frontend/src/pages/PortfolioOptimization.tsx`
+- **Risk Metrics**
+  - Route: `/risk-metrics`
+  - React page: `frontend/src/pages/RiskMetrics.tsx`
+- **Advanced Risk Management**
+  - Route: `/advanced-risk-management`
+  - React page: `frontend/src/pages/AdvancedRiskManagement.tsx`
+
+When a user clicks a Planning tool in the sidebar, the router navigates to the matching path and renders the associated page component.
+
+## Backend services and API proxying
+
+Planning tools typically call dedicated service modules, which in turn talk to backend APIs through the app proxy.
+
+Common service modules include:
+
+- `frontend/src/services/tradingPlannerApi.ts` for trading plan workflows.
+- `frontend/src/services/riskMetricsApi.ts` for risk metric calculations and reporting.
+- `frontend/src/services/advancedRiskApi.ts` for advanced risk management operations.
+
+These services generally hit backend endpoints that the frontend reaches under `/api/...`, with the development server or production reverse proxy forwarding requests to the actual backend host. When you add or debug a Planning tool, check that the corresponding `/api/...` routes exist and that service functions point to the correct paths and methods.
+
+## Debug or add a Planning tool
+
+Use this workflow when a Planning page is not loading correctly or when you add a new Planning tool to the app.
+
+<Steps>
+
+<Step title="Verify sidebar configuration" icon="settings">
+
+- Confirm the `planning` group exists in the sidebar configuration with title `PLANNING`.
+- Check that the group includes an item for your tool, with the correct route path (for example `/trading-planner`) and icon if needed.
+- Clear or inspect `localStorage` key `sidebar-expanded-sections` to ensure `planning` is present when the group should be expanded.
+
+</Step>
+
+<Step title="Check routing in App.tsx" icon="code">
+
+- Open `frontend/src/App.tsx` and locate the route definitions for the Planning section.
+- Verify there is a `<Route>` entry for each Planning path:
+  - `/trading-planner` → `TradingPlanner`
+  - `/position-sizing` → `PositionSizing`
+  - `/portfolio-optimization` → `PortfolioOptimization`
+  - `/risk-metrics` → `RiskMetrics`
+  - `/advanced-risk-management` → `AdvancedRiskManagement`
+- For a new tool, add a route that maps the new path to its page component and confirm navigation works in the browser.
+
+</Step>
+
+<Step title="Wire the page to a service module" icon="terminal">
+
+- Inside the relevant page component (for example `TradingPlanner.tsx`), identify where it loads or submits data.
+- Import and use the appropriate service, such as `tradingPlannerApi.ts`, `riskMetricsApi.ts`, or `advancedRiskApi.ts`.
+- Confirm that each service function calls a valid `/api/...` endpoint and that network requests succeed in the browser dev tools.
+
+</Step>
+
+<Step title="Validate end-to-end behavior" icon="check-circle">
+
+- Open the Planning tool from the sidebar and perform a realistic user action (create a plan, compute metrics, adjust portfolio weights).
+- Watch the network panel to ensure the expected `/api/...` calls return successful responses with the right payload shape.
+- If you added a new tool, refresh the app and confirm the sidebar, route, and backend interactions all work together without errors.
+
+</Step>
+
+</Steps>
+
+## Related guides
+
+Use these guides to understand how Planning tools fit with the rest of the trading workspace.
+
+<Columns cols={3}>
+
+<Card
+  title="Forex tab guide"
+  href="/forex-tab"
+  icon="chart-candlestick"
+  cta="Open guide"
+/>
+
+<Card
+  title="Analysis tab guide"
+  href="/analysis-tab"
+  icon="chart-line"
+  cta="Open guide"
+/>
+
+<Card
+  title="TradingView tab guide"
+  href="/tradingview-tab"
+  icon="monitor"
+  cta="Open guide"
+/>
+
+</Columns>

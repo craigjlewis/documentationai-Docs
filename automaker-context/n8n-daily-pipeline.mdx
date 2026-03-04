@@ -1,0 +1,238 @@
+---
+title: Build the n8n daily FX report pipeline
+description: Create an n8n workflow that ingests daily FX reports into Supabase, stores per-pair and macro data, uploads files, and generates text embeddings.
+---
+
+## Overview
+
+Automate daily ingestion of FX research reports by wiring n8n to Supabase for storage and embeddings generation. The workflow runs once per day, saves structured data into Supabase, uploads source files, and produces vector embeddings for semantic search.
+
+The pipeline is organized into five logical stages:
+
+- **Store master report** — insert one row per report into `daily_reports`.
+- **Store currency pair analysis** — insert one row per pair into `currency_pair_analysis`.
+- **Store economic indicators** — insert macro data into `economic_indicators`.
+- **File upload** — store the original report file (PDF/HTML/text) in storage referenced from Supabase.
+- **Chunk and embed report text** — split full text into chunks, call the embeddings API, and insert rows into `report_embeddings`.
+
+<Callout kind="info">
+
+The examples assume you use Supabase REST endpoints under `/rest/v1/...` and an embeddings provider compatible with OpenAI-style APIs. Adapt URLs and headers to your environment.
+
+</Callout>
+
+## Pipeline stages
+
+### Store master report
+
+Capture high-level metadata about each daily FX report.
+
+Typical data points include:
+
+- Report date and publication timestamp.
+- Report title and author.
+- Source (e.g., desk, provider, or internal tool).
+- A stable report identifier used across the rest of the pipeline.
+
+The n8n HTTP Request node sends a `POST` to `/rest/v1/daily_reports` with this metadata. The response usually returns the inserted row, including the primary key you then reuse downstream.
+
+### Store currency pair analysis
+
+Persist per-pair views extracted from the report into `currency_pair_analysis`.
+
+Each row usually represents:
+
+- A currency pair (e.g., `EURUSD`, `USDJPY`).
+- Directional bias or rating.
+- Key levels, commentary, and summary fields.
+- A foreign key reference to the master report row.
+
+Loop through all pairs returned by your analysis step and call the Supabase REST endpoint once per pair, or use n8n’s batch mode to insert multiple rows in one request.
+
+### Store economic indicators
+
+Add macro context to `economic_indicators` for later querying alongside pair analysis.
+
+Typical fields:
+
+- Indicator name (e.g., `CPI`, `NFP`, `PMI`).
+- Region or country code.
+- Release date, value, previous value, and surprise.
+- A reference back to the related report.
+
+You can derive these from the report text or from a structured JSON produced by an upstream LLM step.
+
+### File upload
+
+Upload the original report file to your storage layer and save its location.
+
+A common pattern:
+
+- Use an HTTP Request node to call a signed upload URL or storage API.
+- Store the resulting file path or public URL in `daily_reports` or a related table.
+- Use the same report identifier across database and storage for traceability.
+
+This keeps raw source material accessible for audits and re-processing.
+
+### Chunk and embed report text
+
+Take the full report text, split it into manageable chunks, compute embeddings, and store them in `report_embeddings`.
+
+The flow for this stage is:
+
+1. JavaScript Code node receives the full text and produces an array of chunks with metadata (e.g., index, character offsets).
+2. HTTP Request node calls the embeddings API (often batching multiple chunks).
+3. Another HTTP Request node inserts the resulting vectors into `report_embeddings` through the Supabase REST endpoint.
+
+Use consistent `report_id` and `chunk_index` fields so you can later reconstruct context windows for retrieval.
+
+## Create the n8n workflow
+
+Use these high-level steps to assemble the workflow in n8n. Exact node names and credentials depend on your project, but the overall structure remains the same.
+
+<Steps>
+  <Step title="Trigger the daily run" icon="clock">
+
+Configure how the pipeline starts:
+
+- Add a **Cron** node that fires once per day at your desired time.
+- Optionally chain a **Webhook** or **Manual trigger** for testing.
+- Pass basic context like the target `report_date` or environment flags as node parameters so downstream nodes can reuse them.
+
+  </Step>
+
+  <Step title="Insert the master report row" icon="database">
+
+Create a new **HTTP Request** node to call Supabase:
+
+- Set **Method** to `POST` and **URL** to your Supabase REST endpoint for `daily_reports` (for example, `https://your-project.supabase.co/rest/v1/daily_reports`).
+- Add the `apikey` and `Authorization` headers expected by Supabase.
+- In the JSON body, map report-level fields from template variables or previous nodes to columns like `report_date`, `title`, and `source`.
+- Store the returned `id` (for example, `report_id`) on the item so you can attach currency pairs, indicators, and embeddings to the correct report.
+
+  </Step>
+
+  <Step title="Store currency pair analysis" icon="bar-chart">
+
+Attach per-pair details to the master report:
+
+- Add a node that provides structured pair analysis (e.g., an LLM node or a previous REST call).
+- Use a **Split In Batches** or similar node to iterate over each currency pair.
+- For each batch item, call a new **HTTP Request** node pointing at `/rest/v1/currency_pair_analysis`.
+- Include fields such as `pair`, `bias`, `commentary`, and the `report_id` from the master report insert.
+
+  </Step>
+
+  <Step title="Store economic indicators" icon="trending-up">
+
+Capture macroeconomic context:
+
+- Ensure you have a list of indicators derived from the report text or an upstream service.
+- Add another **Split In Batches** node if needed to loop through each indicator.
+- For each item, call `/rest/v1/economic_indicators` via **HTTP Request**, including `indicator_name`, `region`, `value`, `release_date`, and `report_id`.
+
+  </Step>
+
+  <Step title="Upload the report file" icon="upload">
+
+Persist the original report artifact:
+
+- Obtain the report file from your source (e.g., Browser automation, previous HTTP download, or an `HTML`/`PDF` node).
+- Use an **HTTP Request** node or storage-specific node to upload the file to your storage backend.
+- Capture the resulting file URL or path and update the corresponding row in `daily_reports` (either by adding a `file_url` field during insert or with a follow-up `PATCH` request).
+
+  </Step>
+
+  <Step title="Chunk and embed report text" icon="code">
+
+Add the semantic search layer:
+
+- Add a **Code** node that takes the full report text and outputs an array of chunks with metadata.
+- Feed those chunks into an **HTTP Request** node targeting your embeddings API. Batch multiple chunks per request when supported.
+- For each embedding returned, call `/rest/v1/report_embeddings` with fields like `report_id`, `chunk_index`, `text`, and `embedding` (as a JSON array or vector type, depending on your schema).
+
+Your workflow run is successful when you see one row in `daily_reports`, multiple rows in `currency_pair_analysis` and `economic_indicators`, the file stored in your bucket or storage service, and multiple rows in `report_embeddings` for the new `report_id`.
+
+  </Step>
+</Steps>
+
+<Callout kind="tip">
+
+Run the workflow manually with a single sample report before enabling the daily cron schedule. Verify that every Supabase table receives the expected data and that you can query embeddings successfully.
+
+</Callout>
+
+## Code node example: split report text into chunks
+
+Use a JavaScript Code node in n8n to transform one long text into an array of chunks with indexes and offsets. This keeps the embeddings step simple and predictable.
+
+<CodeGroup tabs="JavaScript">
+
+```javascript
+// Input: items[0].json.fullText contains the full report text
+// Output: one item per chunk with text and metadata
+
+const fullText = items[0].json.fullText || "";
+const maxChars = 1200; // target chunk size
+const overlap = 200;   // overlapping characters for better context
+
+const chunks = [];
+let start = 0;
+let index = 0;
+
+while (start < fullText.length) {
+  const end = Math.min(start + maxChars, fullText.length);
+  const text = fullText.slice(start, end);
+
+  chunks.push({
+    chunk_index: index,
+    start_offset: start,
+    end_offset: end,
+    text,
+  });
+
+  // advance with overlap so chunks share context
+  start += maxChars - overlap;
+  index += 1;
+}
+
+// n8n expects an array of items: [{ json: {...} }, ...]
+return chunks.map(chunk => ({ json: chunk }));
+```
+
+</CodeGroup>
+
+Use the resulting items as input to your embeddings HTTP Request node. Each item becomes one embedding and one row in `report_embeddings`.
+
+## Data mapping between templates and Supabase
+
+Template variables from upstream steps (for example, LLM outputs or parsed JSON) map directly to Supabase columns when you configure the HTTP Request nodes.
+
+Common mappings include:
+
+- A `report_date` variable mapped into the `report_date` column in `daily_reports`.
+- Pair-level variables such as `pair`, `bias`, and `summary` mapped into columns on `currency_pair_analysis`.
+- Indicator variables such as `indicator_name`, `region`, and `value` mapped into `economic_indicators`.
+- Chunk-level variables like `chunk_index`, `text`, and `embedding` mapped into `report_embeddings`.
+
+When you design your templates or JSON schemas, align variable names with column names wherever possible. That alignment makes n8n’s field mapping straightforward and reduces the risk of silent mismatches.
+
+## Rate limiting and idempotency
+
+<Callout kind="info">
+
+Embeddings APIs and Supabase REST endpoints may enforce rate limits. Plan for batching, backoff, and retries, especially when processing lengthy reports with many chunks.
+
+</Callout>
+
+To keep the daily pipeline reliable and safe to re-run, build idempotency into the design:
+
+- Use a unique `report_id` or `(report_date, source)` key in `daily_reports`.
+- Decide whether to **upsert** rows (update existing data) or **skip** if the report already exists.
+- For embeddings, either delete existing rows for the given `report_id` before inserting new ones or design a unique constraint on `(report_id, chunk_index)` and use upserts.
+
+<Callout kind="tip">
+
+If a run fails halfway through, you can safely re-execute the workflow when you base all writes on stable identifiers and use idempotent Supabase operations (for example, `on_conflict` upserts or pre-run cleanup for a specific `report_id`).
+
+</Callout>

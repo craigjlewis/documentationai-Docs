@@ -1,0 +1,165 @@
+---
+title: FX Trading Reports System context
+description: Overview of the self-hosted FX Trading Reports System used by Automaker, including purpose, capabilities, architecture, implementation order, and required credentials.
+---
+
+## What the FX Trading Reports System is
+
+<Callout kind="info">
+
+The FX Trading Reports System is a self-hosted backend for storing and querying your daily FX trading reports, with AI-powered retrieval for agents and tools like Automaker.
+
+</Callout>
+
+This system replaces external or cloud-hosted storage for daily FX reports with your own Supabase instance plus automation and AI layers. It gives your agents a durable, queryable memory of past FX trades, performance, and notes, while keeping the raw data in your control.
+
+At a high level, the stack uses:
+
+- **Supabase** for structured report data, raw files, and vector embeddings
+- **n8n** for the daily ingestion and processing pipeline
+- **Embedding/RAG** for semantic search and AI chat over report history
+- **Optional Claude MCP** to expose this memory directly to Claude or other MCP-aware agents
+
+## Capabilities
+
+Once fully implemented, the FX Trading Reports System supports:
+
+- **Daily FX report storage**  
+  Persist structured fields (date, pairs, PnL, strategy, tags) plus attached report files.
+
+- **File upload and management**  
+  Store PDFs, screenshots, exports, and other artifacts alongside each report for later review.
+
+- **Semantic search with RAG**  
+  Embed report content and metadata in Supabase and run similarity search to answer natural language questions like “Show my worst EURUSD days in May.”
+
+- **AI chat over history**  
+  Let agents ask questions about past trades, patterns, and performance while the system retrieves relevant reports as context.
+
+- **Trade logging and performance tracking**  
+  Maintain a normalized record of trades and summary stats to support both dashboards and AI analysis.
+
+- **Direct Claude access via MCP (optional)**  
+  Make the report memory available to Claude through an MCP server so Claude can browse, search, and reason over your FX history.
+
+## Implementation order
+
+Follow this implementation order to bring the FX Trading Reports System online. Each step builds on the previous one, so complete them sequentially.
+
+<Steps>
+  <Step title="Provision Supabase" icon="database">
+
+Set up a Supabase project (free tier is sufficient to start) and create the core schema for reports, trades, and embeddings. Confirm you can connect using the Supabase URL and keys from your local dev environment or agent runtime.
+
+  </Step>
+
+  <Step title="Automate daily ingestion with n8n" icon="zap">
+
+Install or access an n8n instance and build a daily pipeline that pulls your FX reports (from email, cloud storage, or another source), normalizes the data, and writes both metadata and files into Supabase.
+
+  </Step>
+
+  <Step title="Add embeddings and RAG search" icon="code">
+
+Connect an embeddings provider (for example, OpenAI embeddings), create an embeddings table in Supabase, and extend the n8n pipeline to embed report content. Implement a simple RAG query flow that can search reports by semantic similarity.
+
+  </Step>
+
+  <Step title="Integrate with the web app / agents" icon="monitor">
+
+Wire the Supabase and RAG queries into your Automaker web app or agent backend so the Forex/Analysis/Reports tabs and tools can fetch, search, and summarize past FX activity for users and agents.
+
+  </Step>
+
+  <Step title="Expose to Claude via MCP (optional)" icon="bot">
+
+If you use Claude as an agent or copilot, deploy an MCP server that connects to Supabase and exposes tools for searching, retrieving, and summarizing FX reports, then register that MCP source with Claude.
+
+  </Step>
+</Steps>
+
+As you complete each step, test with a **small sample of real reports** to confirm that ingestion, search, and agent access behave as expected.
+
+## Architecture
+
+The core data flow is straightforward: n8n ingests and processes daily reports into Supabase, and your applications and MCP server consume that data.
+
+```txt
+[n8n workflows]
+      |
+      v
+[Supabase: reports + files + embeddings]
+      |
+      +--> [Automaker web app / FX tabs]
+      |
+      +--> [MCP server -> Claude / other agents]
+```
+
+Key design points:
+
+- Supabase is the **single source of truth** for FX reports and embeddings.
+- n8n owns ingestion and transformation, not the web app.
+- Agents (including Claude via MCP) **never embed locally**; they call into the Supabase-backed RAG layer.
+
+## Credentials
+
+Keep track of these credentials before wiring Automaker or any agents into the FX Trading Reports System:
+
+- **Supabase URL** – Project base URL for all API/database access.
+- **Supabase anon key** – Public client key, used by browser or unprivileged clients.
+- **Supabase service role key** – Server-side key with elevated permissions (keep this strictly secret).
+- **Embeddings API key** – For your embeddings provider (for example, OpenAI embeddings).
+- **Anthropic / Claude API key** – Required if you run Claude-powered agents or MCP tools.
+
+<Callout kind="alert">
+
+Treat the Supabase service role key and all API keys as secrets. Store them in environment variables or a secrets manager, and never commit them to Git or share them in screenshots.
+
+</Callout>
+
+## Using this system with Automaker
+
+Once this context system is running, Automaker’s FX-related tabs and integrations can use it as long-term memory and retrieval for agents:
+
+- The **Forex**, **Analysis**, and **Reports** tabs can surface and query historical FX data.
+- The **FX Reports (Cloud)** and **BrowserAct FX Reports** features can complement or feed into your self-hosted setup.
+- The **Claude Bridge** integration can connect Claude to your MCP server for richer, report-aware conversations.
+
+<Columns cols={3}>
+
+  <Card
+    title="BrowserAct FX Reports"
+    href="/browseract-reports"
+    icon="monitor"
+    cta="Use browser-based scraping"
+  >
+
+Connect browser automation to fetch FX reports and feed them into your Supabase-backed store.
+
+  </Card>
+
+  <Card
+    title="FX Reports (Cloud)"
+    href="/fx-reports-cloud"
+    icon="cloud"
+    cta="Leverage cloud FX memory"
+  >
+
+Combine the self-hosted FX Reports System with the managed FX Reports cloud service.
+
+  </Card>
+
+  <Card
+    title="Claude Bridge"
+    href="/claude-bridge"
+    icon="bot"
+    cta="Wire Claude into your data"
+  >
+
+Expose the FX Trading Reports System to Claude so agents can search and analyze your trading history.
+
+  </Card>
+
+</Columns>
+
+For a broader view of how this context fits into the rest of Automaker, review the [Features](/features) and [Integrations](/integrations) pages.

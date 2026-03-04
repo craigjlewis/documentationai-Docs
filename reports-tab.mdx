@@ -1,0 +1,89 @@
+---
+title: Reports tab guide
+description: Understand the Reports hub route, page components, services, and a basic workflow for generating and scheduling trading reports.
+---
+
+## Understand the Reports section
+
+Use the Reports section to access reporting, analytics, and scheduling capabilities from a central hub in the trading app.
+
+<Callout kind="info">
+
+The Reports sidebar group uses id `reports` with title `REPORTS`.  
+Routing is configured in `frontend/src/App.tsx` (for example, mapping `/reports-hub` to the reports hub page).  
+The app remembers which sidebar groups are expanded using the `sidebar-expanded-sections` key in `localStorage`.
+
+</Callout>
+
+## Routes and page components
+
+The Reports area is currently implemented as a single hub route that loads a dedicated React page component.
+
+- **Route path**: `/reports-hub`
+- **React page component**: `frontend/src/pages/ReportsHub.tsx`
+
+Use this route when adding navigation links, deep-linking from other parts of the app, or wiring up tests around the Reports UI.
+
+## Backend services used by Reports
+
+Reports features typically rely on service modules that wrap backend APIs and proxy calls under the `/api/...` namespace.
+
+- **Reports API service**: `frontend/src/services/reportsApi.ts`  
+  Likely handles listing, generating, and retrieving individual reports via proxied endpoints such as `/api/reports/...`.
+
+- **Report schedules API service**: `frontend/src/services/reportScheduleApi.ts`  
+  Likely manages creating, updating, and deleting report schedules via endpoints such as `/api/report-schedules/...`.
+
+When you extend Reports functionality, prefer to add methods in these service modules instead of calling `/api/...` endpoints directly from components.
+
+## Basic Reports workflow
+
+Use this quick workflow when you wire up or test the Reports hub.
+
+<Steps>
+
+<Step title="Open the Reports hub" icon="folder">
+
+Navigate in the sidebar to the **REPORTS** group and select **Reports Hub**, which routes to `/reports-hub` and renders `ReportsHub.tsx`. Confirm the URL updates and the hub layout loads without console errors.
+
+</Step>
+
+<Step title="Load available reports" icon="database">
+
+From the hub, trigger the action that lists available reports. Verify that `reportsApi.ts` calls a proxied `/api/...` endpoint and that the UI renders the returned report list or an empty state.
+
+</Step>
+
+<Step title="Configure a report schedule" icon="settings">
+
+Create or edit a report schedule. Confirm that `reportScheduleApi.ts` sends the appropriate request under `/api/...` and that the new schedule appears in the UI after a successful save.
+
+</Step>
+
+</Steps>
+
+## Related reporting docs
+
+Explore these related pages to understand how Reports connects to other reporting surfaces.
+
+<Columns cols={3}>
+
+<Card title="BrowserAct FX Reports" href="/browseract-reports" icon="bar-chart" cta="Use in-browser FX reports">
+
+See how FX reports render directly in the browser, including filters, layouts, and interactions that may integrate with the Reports hub.
+
+</Card>
+
+<Card title="FX Reports (Cloud)" href="/fx-reports-cloud" icon="cloud" cta="Work with cloud-based reports">
+
+Learn how cloud-hosted FX reports are generated and accessed, and how those workflows relate to the app-level Reports section.
+
+</Card>
+
+<Card title="Integrations" href="/integrations" icon="plug" cta="Connect external systems">
+
+Connect brokers, data providers, or downstream tools whose data and events can feed into, or be exported from, the Reports hub.
+
+</Card>
+
+</Columns>

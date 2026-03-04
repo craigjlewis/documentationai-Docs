@@ -1,0 +1,102 @@
+---
+title: TVS Scraper tab guide
+description: Navigate the TVS Scraper sidebar group in the trading app, find each screen’s React page file, and locate the related TVS API service module.
+---
+
+<Callout kind="info">
+
+The TVS Scraper navigation group is defined in `frontend/src/components/Sidebar.tsx` with id `tvs` and title `TVS SCRAPER`. Routes for this group are wired in `frontend/src/App.tsx`, and sidebar expand/collapse state persists in `localStorage` under the `sidebar-expanded-sections` key.
+
+</Callout>
+
+## Navigation and routes
+
+TVS Scraper sidebar items and corresponding routes:
+
+- **TVS Hub**
+  - Route: `/tvs`
+  - React page: `frontend/src/pages/tvs/TVSHub.tsx`
+- **TVS Scraper**
+  - Route: `/tvs/scraper`
+  - React page: `frontend/src/pages/tvs/TVSScraper.tsx`
+- **TVS Reports**
+  - Route: `/tvs/reports`
+  - React page: `frontend/src/pages/tvs/TVSReports.tsx`
+- **TVS Config**
+  - Route: `/tvs/config`
+  - React page: `frontend/src/pages/tvs/TVSConfig.tsx`
+- **TVS Schedule**
+  - Route: `/tvs/schedule`
+  - React page: `frontend/src/pages/tvs/TVSSchedule.tsx`
+- **TVS Status**
+  - Route: `/tvs/status`
+  - React page: `frontend/src/pages/tvs/TVSStatus.tsx`
+
+Use these mappings when you need to jump from a UI screen to the implementation or trace how navigation is wired through React Router.
+
+## Finding screens in the UI and code
+
+Use this sequence when you want to go from a TVS Scraper screen in the app to its React page component in the codebase.
+
+<Steps>
+
+<Step title="Open the TVS Scraper section" icon="folder">
+
+- In the app sidebar, expand the **TVS SCRAPER** group (id `tvs` in `Sidebar.tsx`).
+- Click the screen you care about, for example **TVS Scraper** or **TVS Status**.
+- Confirm the browser URL matches one of the TVS routes such as `/tvs/scraper` or `/tvs/status`.
+
+</Step>
+
+<Step title="Locate the React page component" icon="code">
+
+- In your editor, go to the `frontend/src/pages/tvs` directory.
+- Open the file that matches the route:
+  - `/tvs` → `TVSHub.tsx`
+  - `/tvs/scraper` → `TVSScraper.tsx`
+  - `/tvs/reports` → `TVSReports.tsx`
+  - `/tvs/config` → `TVSConfig.tsx`
+  - `/tvs/schedule` → `TVSSchedule.tsx`
+  - `/tvs/status` → `TVSStatus.tsx`
+- Use your editor’s symbol search to jump into the main React component and event handlers.
+
+</Step>
+
+<Step title="Trace data flow through the TVS API service" icon="terminal">
+
+- From the page component, search for imports from `frontend/src/services/tvsApi.ts`.
+- Open `tvsApi.ts` to see how the page calls the TVS backend via the shared service layer.
+- The TVS service typically proxies requests through the app’s API base path under `/api/...`, so look for TVS-specific paths under this prefix when debugging network calls.
+
+</Step>
+
+</Steps>
+
+## Related docs and next steps
+
+Use these references when you are extending TVS Scraper behavior or integrating its output with other parts of the system.
+
+<Columns cols={3}>
+
+<Card
+  title="Integrations"
+  href="/integrations"
+  icon="plug"
+  cta="Connect external data"
+/>
+
+<Card
+  title="BrowserAct FX Reports"
+  href="/browseract-reports"
+  icon="bar-chart"
+  cta="Understand FX report ingestion"
+/>
+
+<Card
+  title="FX Reports (Cloud)"
+  href="/fx-reports-cloud"
+  icon="cloud"
+  cta="Work with cloud-hosted FX reports"
+/>
+
+</Columns>

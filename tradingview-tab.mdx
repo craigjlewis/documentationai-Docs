@@ -1,0 +1,263 @@
+---
+title: TradingView tab guide
+description: Understand the TradingView tab routes, React pages, and API service mappings so you can maintain and extend the trading-app-web TradingView workflows.
+---
+
+## Overview
+
+The TradingView tab groups all TradingView-powered workflows behind a single navigation cluster, wired to dedicated React pages and a shared API service module.
+
+Each TradingView screen routes to a page under `frontend/src/pages/tradingview` (plus one related alerts page) and calls helpers from `frontend/src/services/tradingviewApi.ts`, which in turn hit `/api/v1/tradingview` endpoints.
+
+<Callout kind="info">
+
+Use this guide when you need to trace a TradingView UI action back to its React page and the corresponding `/api/v1/tradingview` API calls.
+
+</Callout>
+
+## Navigation and routes
+
+The TradingView navigation group lives in the sidebar component and drives all TradingView tab routes.
+
+- **Sidebar group definition**: `frontend/src/components/Sidebar.tsx`
+  - Group id: `tradingview`
+  - Group title: `TRADINGVIEW`
+- **Sidebar state persistence**:
+  - Expand/collapse state uses `localStorage` with key `sidebar-expanded-sections`.
+  - When you add or rename groups, ensure the key handling still matches the expected structure.
+
+<Callout kind="tip">
+
+If the TradingView group does not stay expanded between reloads, check reads/writes to the `sidebar-expanded-sections` key in `Sidebar.tsx`.
+
+</Callout>
+
+### TradingView routes and page files
+
+The TradingView group links to these routes in `frontend/src/App.tsx`:
+
+- `/tradingview` → `frontend/src/pages/tradingview/TradingViewHub.tsx`
+- `/tradingview/global-markets` → `frontend/src/pages/tradingview/GlobalMarketsPage.tsx`
+- `/tradingview/forex` → `frontend/src/pages/tradingview/ForexDataPage.tsx`
+- `/tradingview/technical-analysis` → `frontend/src/pages/tradingview/TechnicalAnalysisPage.tsx`
+- `/tradingview/backtester` → `frontend/src/pages/tradingview/BacktesterPage.tsx`
+- `/tradingview/realtime` → `frontend/src/pages/tradingview/RealTimePage.tsx`
+- `/tradingview/historical` → `frontend/src/pages/tradingview/HistoricalDataPage.tsx`
+- `/tradingview/screener` → `frontend/src/pages/tradingview/ScreenerPage.tsx`
+- `/tradingview/replay` → `frontend/src/pages/tradingview/ReplayModePage.tsx`
+- **Related route (outside the group)**:
+  - `/tradingview-alerts` → `frontend/src/pages/TradingViewAlerts.tsx`
+
+<Columns cols={3}>
+
+<Card
+  title="TradingView hub"
+  href="/tradingview-tab#tradingview-hub-overview"
+  icon="monitor"
+  cta="View hub"
+/>
+
+<Card
+  title="Technical analysis"
+  href="/tradingview-tab#technical-analysis"
+  icon="bar-chart"
+  cta="View analysis"
+/>
+
+<Card
+  title="Backtester"
+  href="/tradingview-tab#backtester"
+  icon="code"
+  cta="View backtester"
+/>
+
+<Card
+  title="Real-time quotes"
+  href="/tradingview-tab#real-time-quotes"
+  icon="zap"
+  cta="View realtime"
+/>
+
+<Card
+  title="Historical data"
+  href="/tradingview-tab#historical-data"
+  icon="database"
+  cta="View historical"
+/>
+
+<Card
+  title="Alerts"
+  href="/tradingview-tab#tradingview-alerts"
+  icon="bell"
+  cta="View alerts"
+/>
+
+</Columns>
+
+## How to use the TradingView tab
+
+This workflow shows how a user typically moves through the TradingView tab and where you hook in API behavior.
+
+<Steps>
+
+<Step title="Open the TradingView group" icon="folder">
+
+- In the sidebar, expand the **TRADINGVIEW** group (id `tradingview`).
+- Confirm the group expansion persists by reloading; the state should come back from `localStorage` key `sidebar-expanded-sections`.
+
+</Step>
+
+<Step title="Enter the TradingView hub" icon="monitor">
+
+- Click **TradingView** to navigate to `/tradingview` (`TradingViewHub.tsx`).
+- Use the hub to route into specific tools like global markets, technical analysis, or backtesting.
+
+</Step>
+
+<Step title="Run an analysis or data query" icon="code">
+
+- From the hub or sidebar, pick a tool (for example, **Technical Analysis** or **Backtester**).
+- Trigger an action and verify the corresponding helper in `frontend/src/services/tradingviewApi.ts` calls a `/api/v1/tradingview` endpoint such as:
+  - `POST /api/v1/tradingview/analysis/single`
+  - `POST /api/v1/tradingview/backtester/run`
+  - `GET /api/v1/tradingview/historical/ohlcv`
+  - `GET /api/v1/tradingview/realtime/quote/:symbol`
+
+</Step>
+
+</Steps>
+
+<Callout kind="alert">
+
+If a TradingView screen renders but never loads data, first confirm the route points to the correct page file, then check that the page imports and calls the right helper from `tradingviewApi.ts`.
+
+</Callout>
+
+## Core screens
+
+TradingView pages share a service module:
+
+- **Service module**: `frontend/src/services/tradingviewApi.ts`
+- **Base path**: `TRADINGVIEW_BASE = "/api/v1/tradingview"`
+
+Each page aligns with one or more areas under this base.
+
+### TradingView hub overview
+
+- **Route**: `/tradingview`
+- **Page file**: `frontend/src/pages/tradingview/TradingViewHub.tsx`
+- **Backend mapping**:
+  - Typically orchestrates navigation to other TradingView tools.
+  - Any data it shows should come from helper calls defined in `tradingviewApi.ts` that target `/api/v1/tradingview` subpaths used by the downstream screens.
+
+### Global markets
+
+- **Route**: `/tradingview/global-markets`
+- **Page file**: `frontend/src/pages/tradingview/GlobalMarketsPage.tsx`
+- **Backend mapping**:
+  - Uses helpers in `tradingviewApi.ts` that aggregate global market data via `/api/v1/tradingview` endpoints.
+  - When you add new global instruments, extend the relevant helper functions rather than calling `fetch` directly.
+
+### Forex data
+
+- **Route**: `/tradingview/forex`
+- **Page file**: `frontend/src/pages/tradingview/ForexDataPage.tsx`
+- **Backend mapping**:
+  - Relies on `tradingviewApi.ts` to query forex-specific data from `/api/v1/tradingview` endpoints.
+  - For cross-checking behavior, compare this page with the dedicated Forex tab flow documented in the [Forex tab guide](/forex-tab).
+
+### Technical analysis
+
+- **Route**: `/tradingview/technical-analysis`
+- **Page file**: `frontend/src/pages/tradingview/TechnicalAnalysisPage.tsx`
+- **Backend mapping**:
+  - Calls `tradingviewApi.ts` helpers that post to:
+    - `POST /api/v1/tradingview/analysis/single`
+  - Extend this area when you add more analysis types or symbols, keeping all HTTP details inside the service module.
+
+### Backtester
+
+- **Route**: `/tradingview/backtester`
+- **Page file**: `frontend/src/pages/tradingview/BacktesterPage.tsx`
+- **Backend mapping**:
+  - Uses a backtesting helper in `tradingviewApi.ts` that targets:
+    - `POST /api/v1/tradingview/backtester/run`
+  - When you change backtest parameters, update the request shape in the service instead of the page.
+
+### Real-time quotes
+
+- **Route**: `/tradingview/realtime`
+- **Page file**: `frontend/src/pages/tradingview/RealTimePage.tsx`
+- **Backend mapping**:
+  - Fetches live quotes through `tradingviewApi.ts` helpers calling:
+    - `GET /api/v1/tradingview/realtime/quote/:symbol`
+  - Use this area for any real-time symbol quote integrations.
+
+### Historical data
+
+- **Route**: `/tradingview/historical`
+- **Page file**: `frontend/src/pages/tradingview/HistoricalDataPage.tsx`
+- **Backend mapping**:
+  - Reads OHLCV and related history via helpers that hit:
+    - `GET /api/v1/tradingview/historical/ohlcv`
+  - Keep pagination and date range handling inside the service where possible.
+
+### Screener
+
+- **Route**: `/tradingview/screener`
+- **Page file**: `frontend/src/pages/tradingview/ScreenerPage.tsx`
+- **Backend mapping**:
+  - Relies on `tradingviewApi.ts` to post or get screener results from:
+    - `/api/v1/tradingview/screener/scan`
+  - When you add new screener filters, pass them through the service and keep the page focused on UI.
+
+### Replay mode
+
+- **Route**: `/tradingview/replay`
+- **Page file**: `frontend/src/pages/tradingview/ReplayModePage.tsx`
+- **Backend mapping**:
+  - Uses historical and possibly replay-specific helpers under `/api/v1/tradingview`.
+  - If replay relies on the same OHLCV data as the historical page, reuse the `historical/ohlcv` helper for consistency.
+
+### TradingView alerts
+
+- **Route**: `/tradingview-alerts`
+- **Page file**: `frontend/src/pages/TradingViewAlerts.tsx`
+- **Backend mapping**:
+  - Handles alert configuration or display, using helpers in `tradingviewApi.ts` that map to relevant `/api/v1/tradingview` alert-related endpoints.
+  - When wiring new alert triggers, keep any TradingView-specific logic inside the service.
+
+<Callout kind="info">
+
+Whenever you introduce a new TradingView feature, add its route to `App.tsx`, a sidebar entry in `Sidebar.tsx`, and a helper in `tradingviewApi.ts` under the `/api/v1/tradingview` base.
+
+</Callout>
+
+## Related docs
+
+Use these pages to understand adjacent systems and the broader API surface.
+
+<Columns cols={3}>
+
+<Card
+  title="Forex tab guide"
+  href="/forex-tab"
+  icon="bar-chart"
+  cta="View Forex tab"
+/>
+
+<Card
+  title="API reference"
+  href="/api-reference/openapi"
+  icon="code"
+  cta="View OpenAPI spec"
+/>
+
+<Card
+  title="Integrations"
+  href="/integrations"
+  icon="plug"
+  cta="View integrations"
+/>
+
+</Columns>

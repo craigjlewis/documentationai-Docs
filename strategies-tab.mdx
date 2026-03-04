@@ -1,0 +1,122 @@
+---
+title: Strategies tab guide
+description: Understand the Strategies sidebar group, routes, and supporting services so you can add, refactor, or debug strategy-related flows.
+---
+
+## Overview
+
+Strategies pages cover building, backtesting, and analyzing trading strategies, especially for forex. This guide maps the sidebar group to routes, page components, and service modules so you can navigate and extend the codebase quickly.
+
+<Callout kind="info">
+
+The Strategies sidebar group uses id `strategies` and title `STRATEGIES`. Routes for this group are defined in `frontend/src/App.tsx`. The app stores expanded sidebar sections in `localStorage` under the key `sidebar-expanded-sections`, which includes the `strategies` group when expanded.
+
+</Callout>
+
+## Navigation and routes
+
+Strategies sidebar items and their corresponding routes and React page components:
+
+- **Strategies**
+  - Route: `/strategies`
+  - Frontend: `frontend/src/pages/Strategies.tsx`
+
+- **Strategy Center**
+  - Route: `/strategy-center`
+  - Frontend: `frontend/src/pages/StrategyCenter.tsx`
+
+- **Forex Strategy Builder**
+  - Route: `/forex-strategy-builder`
+  - Frontend: `frontend/src/pages/ForexStrategyBuilder.tsx`
+
+- **Backtests**
+  - Route: `/backtests`
+  - Frontend: `frontend/src/pages/Backtests.tsx`
+
+- **Forex Backtesting**
+  - Route: `/forex-backtesting`
+  - Frontend: `frontend/src/pages/ForexBacktesting.tsx`
+
+- **Batch Backtests**
+  - Route: `/batch-backtests`
+  - Frontend: `frontend/src/pages/BatchBacktests.tsx`
+
+- **Backtest Comparison**
+  - Route: `/backtest-comparison`
+  - Frontend: `frontend/src/pages/BacktestComparison.tsx`
+
+- **Walk-Forward Analysis**
+  - Route: `/walk-forward`
+  - Frontend: `frontend/src/pages/WalkForwardAnalysis.tsx`
+
+- **Indicator Optimizer**
+  - Route: `/indicator-optimizer`
+  - Frontend: `frontend/src/pages/IndicatorOptimizer.tsx`
+
+Use these mappings when wiring up new navigation items, tracing bugs from the UI into page implementations, or confirming that route definitions in `App.tsx` match the intended sidebar layout.
+
+## Backend services and API proxying
+
+Strategy-related pages typically call dedicated service modules in `frontend/src/services` that in turn talk to backend endpoints proxied under `/api/...`.
+
+Common service modules you will see used across these pages:
+
+- `frontend/src/services/strategyApi.ts`
+- `frontend/src/services/backtestApi.ts`
+- `frontend/src/services/batchBacktestApi.ts`
+- `frontend/src/services/walkForwardApi.ts`
+
+These services usually wrap `fetch` or a similar client and hit backend routes such as `/api/strategies`, `/api/backtests`, or `/api/walk-forward/...`, abstracting request details away from page components.
+
+## Typical workflow changes
+
+Use these steps as a checklist when you add a new strategy-related view or extend an existing one.
+
+<Steps>
+
+<Step title="Add or update the route" icon="settings">
+
+Define or adjust the route in `frontend/src/App.tsx`, and ensure it points to the correct page component under `frontend/src/pages`, consistent with other Strategies routes.
+
+</Step>
+
+<Step title="Wire strategy services" icon="code">
+
+Import the relevant service (`strategyApi`, `backtestApi`, `batchBacktestApi`, or `walkForwardApi`) into your page component and call the appropriate `/api/...` endpoints through the service instead of using raw fetch calls.
+
+</Step>
+
+<Step title="Sync sidebar behavior" icon="folder">
+
+Confirm the new route is included in the `strategies` sidebar group definition and that expanding or collapsing the group persists correctly via the `sidebar-expanded-sections` localStorage key.
+
+</Step>
+
+</Steps>
+
+## Related
+
+<Columns cols={3}>
+
+<Card
+  title="Forex tab guide"
+  href="/forex-tab"
+  icon="chart-candlestick"
+  cta="View forex pages"
+/>
+
+<Card
+  title="Analysis tab guide"
+  href="/analysis-tab"
+  icon="chart-line"
+  cta="Explore analysis tools"
+/>
+
+<Card
+  title="TradingView tab guide"
+  href="/tradingview-tab"
+  icon="monitor"
+  cta="Review charting integration"
+/>
+
+</Columns>

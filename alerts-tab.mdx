@@ -1,0 +1,115 @@
+---
+title: Alerts tab guide
+description: Understand the Alerts sidebar group, routes, and components, and learn a safe workflow for configuring and validating trading alerts.
+---
+
+## Overview
+
+Use the Alerts tab to configure price-, indicator-, risk-, and TradingView-based notifications that react to market conditions in your trading app.
+
+<Callout kind="info">
+
+The Alerts sidebar group uses **id** `alerts` and title `ALERTS`. In `frontend/src/App.tsx`, it wires to the following routes and page components:
+
+- `/price-alerts` → `frontend/src/pages/PriceAlerts.tsx`
+- `/indicator-alerts` → `frontend/src/pages/IndicatorAlerts.tsx`
+- `/risk-alerts` → `frontend/src/pages/RiskAlerts.tsx`
+- `/tradingview-alerts` → `frontend/src/pages/TradingViewAlerts.tsx`
+
+The app persists which sidebar groups are expanded in `localStorage` under the key `sidebar-expanded-sections`.
+
+</Callout>
+
+### Alerts routes and page components
+
+Each alert type has its own route and React page file under `frontend/src/pages`:
+
+- **Price alerts** — `/price-alerts` handled by `PriceAlerts.tsx`
+- **Indicator alerts** — `/indicator-alerts` handled by `IndicatorAlerts.tsx`
+- **Risk alerts** — `/risk-alerts` handled by `RiskAlerts.tsx`
+- **TradingView alerts** — `/tradingview-alerts` handled by `TradingViewAlerts.tsx`
+
+Use these mappings when you add new fields, adjust layouts, or trace alert behavior from the UI down into the codebase.
+
+## Backend services and API proxying
+
+The Alerts pages typically call dedicated service modules in `frontend/src/services` for all alert-related operations:
+
+- `alertApi.ts` — likely handles price, indicator, and risk alert CRUD and status checks.
+- `tradingviewAlertApi.ts` — likely handles TradingView-specific alert integration and payload handling.
+
+These services usually talk to the backend through proxied HTTP calls under `/api/...`, so you adjust backend behavior in one place without changing every call site in the React components.
+
+<Callout kind="alert">
+
+Before relying on alerts for critical risk management, verify both the UI definitions and backend behavior in a staging or test environment, and confirm how notifications are actually delivered.
+
+</Callout>
+
+## Typical workflow when working on alerts
+
+Use this workflow when you modify or extend any of the Alerts pages or services.
+
+<Steps>
+
+<Step title="Locate the relevant Alerts page" icon="folder">
+
+- Open `frontend/src/App.tsx` and confirm which route you care about:
+  - `/price-alerts`, `/indicator-alerts`, `/risk-alerts`, or `/tradingview-alerts`.
+- Open the corresponding page file in `frontend/src/pages`:
+  - `PriceAlerts.tsx`, `IndicatorAlerts.tsx`, `RiskAlerts.tsx`, or `TradingViewAlerts.tsx`.
+
+Your editor should now show the JSX for the exact screen you see under the `ALERTS` sidebar group.
+
+</Step>
+
+<Step title="Identify the service layer calls" icon="code">
+
+- From the page component, follow imports into `frontend/src/services/alertApi.ts` or `frontend/src/services/tradingviewAlertApi.ts`.
+- Review how these functions call the backend through `/api/...` to create, list, update, or delete alerts.
+- When you change business logic or payloads, prefer updating the service functions instead of scattering new fetch calls across components.
+
+You should see a clear chain from UI actions in the Alerts page into one of the service modules and then to the proxied backend endpoint.
+
+</Step>
+
+<Step title="Test alerts safely in staging" icon="shield">
+
+- Run the app against a staging or test backend where alert triggers will not affect real positions or live notifications.
+- Create at least one alert in each modified screen and confirm:
+  - The UI persists configuration as expected.
+  - The relevant `alertApi.ts` or `tradingviewAlertApi.ts` calls succeed.
+  - The backend receives the expected `/api/...` requests and responds correctly.
+
+Once staging behavior matches your expectations, roll the change into production and monitor alerts closely during the first trading sessions.
+
+</Step>
+
+</Steps>
+
+## Related guides
+
+<Columns cols={3}>
+
+<Card
+  title="Forex tab guide"
+  href="/forex-tab"
+  icon="chart-candlestick"
+  cta="View Forex workflows"
+/>
+
+<Card
+  title="Analysis tab guide"
+  href="/analysis-tab"
+  icon="chart-line"
+  cta="Explore analysis tools"
+/>
+
+<Card
+  title="TradingView tab guide"
+  href="/tradingview-tab"
+  icon="monitor"
+  cta="Integrate TradingView"
+/>
+
+</Columns>

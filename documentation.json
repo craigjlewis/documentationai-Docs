@@ -49,6 +49,71 @@
                 "title": "Integrations",
                 "path": "integrations",
                 "icon": "plug"
+              },
+              {
+                "title": "BrowserAct FX Reports",
+                "path": "browseract-reports",
+                "icon": "chart-bar"
+              },
+              {
+                "title": "Claude Bridge",
+                "path": "claude-bridge",
+                "icon": "bot"
+              },
+              {
+                "title": "FX Reports (Cloud)",
+                "path": "fx-reports-cloud",
+                "icon": "cloud-upload"
+              },
+              {
+                "title": "Forex tab guide",
+                "path": "forex-tab",
+                "icon": "chart-candlestick"
+              },
+              {
+                "title": "Analysis tab guide",
+                "path": "analysis-tab",
+                "icon": "chart-line"
+              },
+              {
+                "title": "TradingView tab guide",
+                "path": "tradingview-tab",
+                "icon": "monitor"
+              },
+              {
+                "title": "TVS Scraper tab guide",
+                "path": "tvs-scraper-tab",
+                "icon": "bug"
+              },
+              {
+                "title": "Options tab guide",
+                "path": "options-tab",
+                "icon": "sliders-horizontal"
+              },
+              {
+                "title": "Strategies tab guide",
+                "path": "strategies-tab",
+                "icon": "target"
+              },
+              {
+                "title": "Forecasting tab guide",
+                "path": "forecasting-tab",
+                "icon": "trending-up"
+              },
+              {
+                "title": "Planning tab guide",
+                "path": "planning-tab",
+                "icon": "calendar"
+              },
+              {
+                "title": "Alerts tab guide",
+                "path": "alerts-tab",
+                "icon": "bell"
+              },
+              {
+                "title": "Reports tab guide",
+                "path": "reports-tab",
+                "icon": "file-chart-column"
               }
             ]
           }

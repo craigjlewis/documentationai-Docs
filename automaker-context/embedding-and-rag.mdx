@@ -1,0 +1,333 @@
+---
+title: Embeddings and RAG for FX reports
+description: Chunk FX reports, generate embeddings, and build a retrieval-augmented generation flow that answers natural-language questions over your report corpus.
+---
+
+## Overview
+
+Use embeddings and retrieval-augmented generation (RAG) to let users ask natural-language questions about FX reports, such as how sentiment on a pair has shifted over time or where a forecast changed.
+
+<Callout kind="info">
+
+At a high level, you:
+
+1. Chunk each FX report into semantically meaningful sections.  
+2. Embed each chunk with a consistent model and store vectors in your database.  
+3. Embed the user query, run a vector search (for example, `search_reports` in Supabase), and pass the retrieved chunks to an LLM to answer.
+
+</Callout>
+
+<Callout kind="alert">
+
+Treat all API keys and access tokens as secrets. Store them in environment variables or a secure secret manager, and avoid pasting real keys into prompts, logs, or documentation.
+
+</Callout>
+
+This guide focuses on how to chunk reports, choose an embedding model and schema, implement the retrieval flow, and test the full pipeline.
+
+## Chunking strategy for FX reports
+
+Chunking determines what the model retrieves and how coherent the context feels to the LLM. Use section-based chunks that mirror how analysts structure their reports, rather than fixed-size token windows.
+
+### Chunk types
+
+Model each FX report as a set of chunks with semantic roles:
+
+- **Executive summary**  
+  A single chunk that summarizes the report at a high level. This gives the LLM a fast way to orient itself.
+
+- **Per-pair sections**  
+  Separate chunks per currency pair (for example, `EUR/USD`, `USD/JPY`, `AUD/USD`). Include both the pair’s heading and its core analysis in the same chunk so pair-specific queries retrieve self-contained context.
+
+- **Other report sections**  
+  Additional chunks for sections like methodology, macro backdrop, risk scenarios, and trade ideas. These often answer “why” questions and support follow-ups like “what assumptions drive this forecast?”.
+
+Treat each chunk as an independent document for retrieval, even though multiple chunks belong to the same report.
+
+### Using chunk prefixes
+
+Prefixes in the stored text improve retrieval quality by giving the embedding model more structure.
+
+For each chunk, prepend a short label that encodes its role and scope, for example:
+
+- Executive summary chunks:
+
+  ```text
+  executive_summary: [Report Title, Date, Region] ...
+  ```
+
+- Per-pair chunks:
+
+  ```text
+  pair_section: EUR/USD outlook — ...
+  ```
+
+- Other sections:
+
+  ```text
+  scenario_analysis: ...
+  methodology_section: ...
+  ```
+
+These prefixes help the embedding model distinguish, for example, a short executive overview from a deep dive into a single pair, even when they use similar phrases.
+
+## Choosing an embeddings model and schema
+
+Use a modern small-footprint embeddings model that balances quality and cost.
+
+### Recommended model
+
+Use an embeddings model such as `text-embedding-3-small` with **1536 dimensions**.
+
+This size gives enough capacity to represent complex FX report semantics (pairs, time horizons, scenarios) while keeping storage and search costs manageable.
+
+### Matching your database schema
+
+Your database schema must match the exact embedding dimensionality. If you use a 1536‑dimension model, define your `vector` column accordingly.
+
+<CodeGroup tabs="Postgres SQL">
+
+```sql
+create extension if not exists vector;
+
+create table if not exists report_chunks (
+  id                uuid primary key default gen_random_uuid(),
+  report_id         uuid not null,
+  chunk_type        text not null,               -- e.g. 'executive_summary', 'pair_section'
+  pair              text,                        -- nullable for non-pair chunks
+  chunk_index       int not null,                -- position within the report
+  content           text not null,               -- full chunk text, including prefix
+  embedding         vector(1536) not null,       -- must match model dimensions
+  created_at        timestamptz not null default now()
+);
+```
+
+</CodeGroup>
+
+If you change embeddings model later (for example, to a different dimension size), migrate the table or add a new `embedding` column with the new dimension and re-embed your data.
+
+## RAG retrieval flow
+
+Once you store embeddings for each chunk, the RAG flow is straightforward: embed the query, search the vector store, and pass the best chunks to an LLM.
+
+<Steps>
+
+<Step title="Embed the user query" icon="terminal">
+
+Generate an embedding for the user’s natural-language question with the **same** embeddings model you used for report chunks.
+
+<CodeGroup tabs="Pseudo-code">
+
+```python
+from embeddings_client import EmbeddingsClient
+
+client = EmbeddingsClient(api_key=process.env.EMBEDDINGS_API_KEY)
+
+def embed_query(question: str) -> list[float]:
+    response = client.create(
+        model="text-embedding-3-small",
+        input=question,
+    )
+    # Assume response.data[0].embedding is a 1536-dim float vector
+    return response.data[0].embedding
+```
+
+</CodeGroup>
+
+Use the raw float vector as input to your database search function.
+
+</Step>
+
+<Step title="Run vector search over report chunks" icon="database">
+
+Send the query embedding to your Supabase function (for example, `search_reports`) to retrieve the most relevant chunks.
+
+<CodeGroup tabs="Postgres SQL">
+
+```sql
+-- Example of a search function signature
+create or replace function search_reports(
+  query_embedding vector(1536),
+  match_limit int default 8,
+  match_threshold float default 0.6
+)
+returns table (
+  id uuid,
+  report_id uuid,
+  content text,
+  pair text,
+  chunk_type text,
+  similarity float
+)
+language sql
+stable
+as $$
+  select
+    rc.id,
+    rc.report_id,
+    rc.content,
+    rc.pair,
+    rc.chunk_type,
+    1 - (rc.embedding <=> query_embedding) as similarity
+  from report_chunks rc
+  where 1 - (rc.embedding <=> query_embedding) >= match_threshold
+  order by rc.embedding <=> query_embedding
+  limit match_limit;
+$$;
+```
+
+</CodeGroup>
+
+Call this function from your application code and collect the top chunks by similarity.
+
+</Step>
+
+<Step title="Compose LLM prompt with retrieved chunks" icon="code">
+
+Combine the user’s question with the retrieved chunks and send them to your LLM. Keep the prompt structured so the model knows where the context starts and ends.
+
+<CodeGroup tabs="Pseudo-code">
+
+```python
+from llm_client import ChatClient
+
+llm = ChatClient(api_key=process.env.LLM_API_KEY)
+
+def build_context(chunks):
+    # Sort by similarity descending if needed
+    sorted_chunks = sorted(chunks, key=lambda c: c["similarity"], reverse=True)
+    lines = []
+    for c in sorted_chunks:
+        header = f"[{c['chunk_type']} | pair={c.get('pair') or 'n/a'}]"
+        lines.append(f"{header}\n{c['content']}")
+    return "\n\n---\n\n".join(lines)
+
+def answer_question(question: str, chunks: list[dict]) -> str:
+    context_block = build_context(chunks)
+    messages = [
+        {
+            "role": "system",
+            "content": "You are an FX strategist answering questions using only the provided report context."
+        },
+        {
+            "role": "user",
+            "content": (
+                "Question:\n"
+                f"{question}\n\n"
+                "Context from FX reports:\n"
+                f"{context_block}\n\n"
+                "Answer using the context. If you are unsure, say you do not know."
+            ),
+        },
+    ]
+    response = llm.chat(model="fx-reports-analyst", messages=messages)
+    return response.choices[0].message["content"]
+```
+
+</CodeGroup>
+
+The LLM’s answer is now grounded in real report content, rather than relying on general market knowledge.
+
+</Step>
+
+</Steps>
+
+## Query patterns
+
+Design your chunking and retrieval to support the types of questions traders and analysts actually ask. Here are examples that work well with section-based chunks and prefixes:
+
+- **Pair-specific sentiment over time**
+
+  > How has AUD/USD sentiment shifted between the last two monthly reports?
+
+  This should retrieve `AUD/USD` pair sections from multiple reports plus executive summaries.
+
+- **Drivers of a current view**
+
+  > What are the main macro drivers behind the current EUR/USD bullish bias?
+
+  Expect retrieval of `EUR/USD` pair sections and macro backdrop sections.
+
+- **Scenario or risk questions**
+
+  > Under what scenarios would you turn bearish on USD/JPY over the next quarter?
+
+  This leans on scenario and risk sections, plus any trade idea notes for `USD/JPY`.
+
+- **Cross-report comparisons**
+
+  > Where did your forecast for GBP/USD change the most compared with last quarter?
+
+  Combine `GBP/USD` chunks across reports, then let the LLM compare forecasts in its answer.
+
+Use prefixes like `pair_section: EUR/USD outlook` so these questions pull the right chunks even when language in the body text overlaps across pairs.
+
+## Testing your embeddings and search
+
+Before wiring everything into your application, validate that embeddings and search behave as expected with a few targeted SQL checks.
+
+### Insert a sample chunk and embedding
+
+Start by inserting a known chunk and its embedding so you can probe search behavior.
+
+<CodeGroup tabs="Postgres SQL">
+
+```sql
+insert into report_chunks (
+  report_id,
+  chunk_type,
+  pair,
+  chunk_index,
+  content,
+  embedding
+)
+values (
+  'b7b08d00-1b66-4c71-9a7f-54ce4db1f9a3', -- sample report id
+  'pair_section',
+  'AUD/USD',
+  1,
+  'pair_section: AUD/USD outlook — Sentiment turned more constructive as commodity prices stabilized...',
+  -- Example 1536-dim embedding shortened for readability
+  '[0.0123, -0.0045, 0.0211, ...]'::vector
+);
+```
+
+</CodeGroup>
+
+In your real pipeline, you generate this `embedding` value via your embeddings API client and pass it into the SQL insert.
+
+### Run `search_reports` with a placeholder vector
+
+Test your search function directly from SQL using a handcrafted or previously logged embedding vector.
+
+<CodeGroup tabs="Postgres SQL">
+
+```sql
+select *
+from search_reports(
+  -- Example query embedding, shorten here but pass a full 1536-dim vector in practice
+  '[0.0119, -0.0041, 0.0207, ...]'::vector,
+  5,        -- match_limit
+  0.5       -- match_threshold
+);
+```
+
+</CodeGroup>
+
+Verify that the `content`, `pair`, and `chunk_type` fields of the top results match your expectations for that query.
+
+### Practical testing tips
+
+- **Start with a tiny dataset**  
+  Index a single report with 5–10 chunks and test a variety of questions. Confirm that the right chunk types and pairs show up before scaling.
+
+- **Inspect similarity scores**  
+  Look at the `similarity` column from `search_reports`. If unrelated chunks have high similarity, tighten `match_threshold` or review whether chunk prefixes are specific enough.
+
+- **Compare executive vs pair chunks**  
+  Ask high-level questions (“What is the overall USD outlook?”) and pair-specific questions (“What is the AUD/USD view?”) and confirm that the mix of retrieved chunk types changes appropriately.
+
+- **Check failure modes**  
+  Ask questions that your reports do not answer. Ensure the search either returns no matches or low-similarity chunks and that your LLM prompt handles this by saying it does not know.
+
+These tests give you confidence that embeddings, schema, and retrieval are wired correctly before you expose the RAG capabilities to end users.

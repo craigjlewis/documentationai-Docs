@@ -1,162 +1,280 @@
 ---
 title: Integrations
-description: Extend CJL_Org's functionality by connecting it to external tools, services, and workflows for seamless documentation management.
+description: Configure external services like Claude, Documentero, Supabase, Redis, and market data providers that power the trading-app-web stack.
 ---
 
 ## Overview
 
-CJL_Org supports a variety of integrations to enhance your documentation workflows. Connect to version control systems for automatic syncing, embed third-party apps, set up webhooks for real-time notifications, and handle exports and imports in multiple formats. These integrations help you maintain up-to-date documentation without manual effort.
+The trading-app-web stack relies on several external services for AI analysis, scraping, PDF generation, storage, async processing, and market data. Correctly wiring these integrations is required for a functional environment.
 
-<Callout kind="tip">
-Start with GitHub sync for the most common use case, then explore webhooks for custom notifications.
+Most integrations are configured through environment variables, with defaults or fallbacks defined in `api/core/config.py` and `.env.example`.
+
+<Callout kind="info">
+Check `.env.example` as the source of truth for required environment variables and their expected formats, then override values in your own `.env`.
 </Callout>
 
-## Key Integrations
+## Main integrations
 
-Use these popular integrations to supercharge your CJL_Org setup.
+Use these core integrations to run the full pipeline: scraping via Claude Bridge and Playwright, AI analysis with Claude, PDF generation with Documentero, artifact storage in Supabase, async jobs with Redis/Celery, and market data via AlphaVantage and EODHD.
 
 <Columns cols={2}>
-  <Card title="GitHub Sync" icon="github" href="#github-sync">
-    Automatically sync documentation changes with your GitHub repositories.
+  <Card title="Claude / Anthropic" icon="code" href="#claude-and-claude-bridge">
+    Power AI analysis and reasoning across the trading workflows using Anthropic Claude models.
   </Card>
-  <Card title="Webhook Notifications" icon="zap" href="#webhooks">
-    Receive instant alerts on documentation updates via webhooks.
+  <Card title="Claude Bridge" icon="cloud" href="#claude-and-claude-bridge">
+    Route BrowserAct and other AI calls through a local or remote Claude Bridge service.
   </Card>
-  <Card title="Third-Party Embeds" icon="globe" href="#embeds">
-    Embed tools like Figma, Jira, or Slack directly into your docs.
+  <Card title="Documentero" icon="file-text" href="#documentero-pdf-generation">
+    Generate PDF reports from BrowserAct runs and other analysis outputs.
   </Card>
-  <Card title="Export/Import" icon="upload" href="#export-import">
-    Export docs to PDF, Markdown, or import from various sources.
+  <Card title="Supabase" icon="database" href="#supabase-storage-and-auth">
+    Store report artifacts, assets, and metadata using Supabase storage and APIs.
+  </Card>
+  <Card title="Redis / Celery" icon="settings" href="#redis-and-celery-async-processing">
+    Execute scraping and BrowserAct pipelines asynchronously with Celery workers backed by Redis.
+  </Card>
+  <Card title="AlphaVantage" icon="bar-chart" href="#alphavantage-market-data">
+    Fetch market and time-series price data as part of the trading analysis stack.
+  </Card>
+  <Card title="EODHD" icon="bar-chart" href="#eodhd-optional-market-data-enrichment">
+    Optionally enrich BrowserAct pipelines with End-of-Day Historical Data feeds.
+  </Card>
+  <Card title="Playwright / TradingView scraper" icon="terminal" href="#playwright-and-tradingview-scraper">
+    Scrape TVS / TradingView and related sources using a Playwright-based scraper.
   </Card>
 </Columns>
 
-## GitHub and Version Control Sync
+## Optional vs required integrations
 
-Sync your CJL_Org documentation with GitHub repositories to enable version control and collaborative editing.
+Not every integration is required for a basic development setup. Some services are mandatory for the API to start, while others are only needed for specific features like PDF export or additional data enrichment.
 
-### Setup Steps
+<Callout kind="info">
+Core runtime services usually required:
+- Claude / Anthropic API key (or Claude Bridge configured)
+- Redis and Celery broker/result backend
+- Supabase URL and keys (if you store artifacts in Supabase)
 
-<Steps>
-  <Step title="Connect Repository" icon="github">
-    Navigate to Settings > Integrations in your CJL_Org dashboard.
-    
-    Select GitHub and authorize the app.
-  </Step>
-  <Step title="Configure Sync" icon="settings">
-    Choose the repository and branch to sync (e.g., `main`).
-    
-````bash
-# Example sync command after setup
-cjl-org sync --repo owner/repo --branch main
-````
-  </Step>
-  <Step title="Verify Sync" icon="check-circle">
-    Push a change to GitHub and confirm it appears in CJL_Org.
-  </Step>
-</Steps>
+Feature-specific and optional:
+- Documentero and BrowserAct Documentero API key (PDF exports)
+- AlphaVantage and EODHD API keys (market data enrichment)
+- Playwright / TradingView scraper service (TVS/TradingView scraping)
 
-<CodeGroup tabs="JavaScript,Python">
-````javascript
-// Pull latest changes via API
-const response = await fetch('https://api.example.com/docs/sync/github', {
-  method: 'POST',
-  headers: { 'Authorization': 'Bearer YOUR_TOKEN' },
-  body: JSON.stringify({ repo: 'owner/repo', branch: 'main' })
-});
-````
-````python
-import requests
+If you disable an optional integration, also disable or guard any code paths that depend on it.
+</Callout>
 
-response = requests.post(
-    'https://api.example.com/docs/sync/github',
-    headers={'Authorization': 'Bearer YOUR_TOKEN'},
-    json={'repo': 'owner/repo', 'branch': 'main'}
-)
-````
-</CodeGroup>
+## Claude and Claude Bridge
 
-## Webhook Setup for Notifications
+Claude / Anthropic powers AI reasoning, and Claude Bridge acts as an HTTP bridge that BrowserAct and other services call. The backend falls back from `CLAUDE_API_KEY` to `ANTHROPIC_API_KEY` when needed.
 
-Set up webhooks to notify external services when documentation changes occur.
+You must either provide a valid Claude API key directly or run a Claude Bridge service reachable at the configured URL.
 
-### Webhook Payload
+### What it is used for
 
-```mermaid
-sequenceDiagram
-    CJL_Org->>+Webhook Endpoint: POST /webhook
-    Webhook Endpoint-->>-CJL_Org: 200 OK
-    Note right of Webhook Endpoint: Payload includes event type, doc ID, changes
-```
+- Running AI analysis over scraped trading content.
+- Powering BrowserAct tasks that require long-context reasoning.
+- Supporting any internal tools that call Anthropic models.
 
-<Tabs>
-  <Tab title="Slack" icon="message-circle">
-    Configure your Slack incoming webhook URL.
-    
-    <ParamField header="X-CJL-Signature" param-type="string" required="true">
-      HMAC signature for payload verification.
-    </ParamField>
-    
-````javascript
-// Verify signature in Node.js
-const crypto = require('crypto');
-const signature = 'sha256=' + crypto.createHmac('sha256', 'YOUR_WEBHOOK_SECRET')
-  .update(payload)
-  .digest('hex');
-````
-  </Tab>
-  <Tab title="Custom Endpoint" icon="server">
-    Handle events like `doc.updated` or `doc.published`.
-    
-    <ResponseField name="event" field-type="string">
-      Type of event triggered.
-    </ResponseField>
-    
-````javascript
-app.post('/webhook', (req, res) => {
-  if (req.body.event === 'doc.updated') {
-    // Handle update
-  }
-  res.status(200).send('OK');
-});
-````
-  </Tab>
-</Tabs>
+### What must be running
 
-## Third-Party App Embeddings
+- Direct Claude integration: no additional process beyond the backend, just a valid API key.
+- Claude Bridge integration: a reachable bridge service, often a local Docker container listening on `http://localhost:3009` by default.
 
-Embed external content seamlessly.
+### Environment variables
 
-Use iframe embeds for apps like Figma or Google Docs.
+<ParamField body="CLAUDE_API_KEY" param-type="string" required="false" show-location="false">
+Primary API key for Anthropic Claude. The app uses this when available to authenticate AI calls.
+</ParamField>
 
-```
-Supported formats: iframe, oEmbed
-Max size: `<1200px` width
-```
+<ParamField body="ANTHROPIC_API_KEY" param-type="string" required="false" show-location="false">
+Fallback Anthropic API key used when `CLAUDE_API_KEY` is not set. Set at least one of these keys.
+</ParamField>
 
-Example:
+<ParamField body="CLAUDE_BRIDGE_URL" param-type="string" required="false" show-location="false">
+Base URL for the Claude Bridge service. Defaults to `http://localhost:3009` when unset. Required if your AI calls go through a bridge instead of hitting Anthropic directly.
+</ParamField>
 
-```html
-<iframe src="https://www.figma.com/embed?embed_host=share&url=https://www.figma.com/file/ABC123" width="600" height="450"></iframe>
-```
+<Callout kind="tip">
+In development, start Claude Bridge on `http://localhost:3009` and keep your Anthropic key in the bridge process. This limits direct key exposure in the app.
+</Callout>
 
-## Export and Import Formats
+## Documentero PDF generation
 
-Manage your documentation portability.
+Documentero is used to generate PDF reports from BrowserAct runs and other analysis outputs. The backend calls Documentero’s API with HTML or structured data and receives a PDF in response.
 
-| Format     | Export | Import | Use Case                  |
-|------------|--------|--------|---------------------------|
-| Markdown  | ✅     | ✅     | GitHub sync, blogs        |
-| PDF       | ✅     | ❌     | Printing, sharing         |
-| HTML      | ✅     | ✅     | Web publishing            |
-| JSON      | ✅     | ✅     | API backups               |
+### What it is used for
 
-<Expandable title="Advanced Export Options" default-open="false">
-Customize exports with filters:
-- Include/exclude sections
-- Theme selection
-- Metadata injection
-</Expandable>
+- Generating PDF artifacts from BrowserAct reports.
+- Producing downloadable summaries of trading analyses.
 
-<Callout kind="success">
-Integrations streamline your workflow. Test webhooks in a staging environment first.
+### What must be running
+
+- A reachable Documentero API instance (cloud or self-hosted).
+- Network access from the backend to the Documentero endpoint.
+
+### Environment variables
+
+<ParamField body="DOCUMENTERO_API_KEY" param-type="string" required="false" show-location="false">
+API key used when contacting the Documentero service to generate PDFs for generic use cases.
+</ParamField>
+
+<ParamField body="BROWSERACT_DOCUMENTERO_API_KEY" param-type="string" required="false" show-location="false">
+Dedicated Documentero API key used by the BrowserAct pipelines for report PDF generation. Set this when running BrowserAct end-to-end.
+</ParamField>
+
+<Callout kind="tip">
+If you only need HTML reports in development, you can leave Documentero keys unset and skip PDF generation paths until you are ready to test exports.
+</Callout>
+
+## Supabase storage and auth
+
+Supabase provides storage and database capabilities for artifacts produced by BrowserAct and other services. The app uses both the anon key and a service role key for different trust levels.
+
+### What it is used for
+
+- Storing PDFs and other generated report files.
+- Persisting metadata and structured outputs for later retrieval.
+- Serving assets back to the frontend via signed URLs.
+
+### What must be running
+
+- A Supabase project with:
+  - Base URL enabled.
+  - Auth and storage configured.
+- Network access between the backend and Supabase.
+
+### Environment variables
+
+<ParamField body="SUPABASE_URL" param-type="string" required="true" show-location="false">
+Base URL of your Supabase project, typically `https://xyzcompany.supabase.co`. Used for all Supabase API calls.
+</ParamField>
+
+<ParamField body="SUPABASE_ANON_KEY" param-type="string" required="true" show-location="false">
+Public anon key used by client-side or low-privilege operations. Only grant minimal required scopes.
+</ParamField>
+
+<ParamField body="SUPABASE_SERVICE_ROLE_KEY" param-type="string" required="true" show-location="false">
+Service role key used by the backend for privileged operations like server-side inserts or storage actions. Keep this secret and only use it on the server.
+</ParamField>
+
+<Callout kind="alert">
+Never expose `SUPABASE_SERVICE_ROLE_KEY` in frontend code, logs, or client-side configuration. Treat it as a secret with full database access.
+</Callout>
+
+## Redis and Celery async processing
+
+Redis and Celery power asynchronous jobs such as scraping, BrowserAct full pipelines, and other long-running tasks. The backend enqueues jobs, and separate Celery workers consume them.
+
+### What it is used for
+
+- Running TVS/TradingView scrapes without blocking HTTP requests.
+- Executing BrowserAct pipelines end-to-end (scrape → analyze → store).
+- Offloading long-running or scheduled background tasks.
+
+### What must be running
+
+- A Redis instance reachable by both the API and Celery workers.
+- One or more Celery worker processes configured with the same broker/result backend as the API.
+- Optional Celery beat or scheduler if you rely on periodic tasks.
+
+### Environment variables
+
+<ParamField body="REDIS_URL" param-type="string" required="true" show-location="false">
+Connection URL for your Redis instance, for example `redis://localhost:6379/0`. Used by Celery and potentially other caching layers.
+</ParamField>
+
+<ParamField body="CELERY_BROKER_URL" param-type="string" required="true" show-location="false">
+Broker URL for Celery task transport. Often the same as `REDIS_URL` when using Redis as the broker.
+</ParamField>
+
+<ParamField body="CELERY_RESULT_BACKEND" param-type="string" required="true" show-location="false">
+Backend URL where Celery stores task results and states. Frequently matches `REDIS_URL` when using Redis as both broker and backend.
+</ParamField>
+
+<Callout kind="tip">
+In local development, point `REDIS_URL`, `CELERY_BROKER_URL`, and `CELERY_RESULT_BACKEND` to the same Redis instance to keep configuration simple.
+</Callout>
+
+## AlphaVantage market data
+
+AlphaVantage provides market and time-series data used by the trading stack. The backend calls AlphaVantage to retrieve prices, indicators, or other metrics that feed into reports and analyses.
+
+### What it is used for
+
+- Fetching historical and intraday price data.
+- Pulling technical indicators used in trading strategies.
+- Supplementing BrowserAct or other reporting flows with numeric market context.
+
+### What must be running
+
+- No local service is required, but:
+  - You must create an AlphaVantage account.
+  - The AlphaVantage API must be reachable from the backend host.
+
+### Environment variables
+
+<ParamField body="ALPHA_VANTAGE_API_KEY" param-type="string" required="false" show-location="false">
+API key used to authenticate requests to AlphaVantage. Required for any feature that fetches data from AlphaVantage endpoints.
+</ParamField>
+
+<Callout kind="info">
+If you do not set `ALPHA_VANTAGE_API_KEY`, any feature depending on AlphaVantage market data will fail or need to be disabled. Check the code paths where AlphaVantage is imported before leaving this unset.
+</Callout>
+
+## EODHD optional market data enrichment
+
+EODHD (End-of-Day Historical Data) is used as an optional data source for BrowserAct’s full pipeline. When configured, it can enrich reports with additional historical data.
+
+### What it is used for
+
+- Enriching BrowserAct reports with extended end-of-day historical data.
+- Providing an alternative or complementary feed to AlphaVantage.
+
+### What must be running
+
+- An active EODHD subscription or API access.
+- Internet access from the backend to EODHD endpoints.
+
+### Environment variables
+
+<ParamField body="EODHD_API_KEY" param-type="string" required="false" show-location="false">
+API key used when calling EODHD endpoints for additional market data. The exact variable name may differ slightly depending on the repo version; confirm in `.env.example` and align your configuration accordingly.
+</ParamField>
+
+<Callout kind="info">
+Repo docs mention EODHD integration for BrowserAct enrichment. If your `.env.example` uses a slightly different name for this key, follow that name instead of `EODHD_API_KEY`.
+</Callout>
+
+## Playwright and TradingView scraper
+
+A Playwright-based scraper is used to pull content from TVS/TradingView and similar sources. It runs as part of the services layer, typically coordinated by Celery tasks.
+
+### What it is used for
+
+- Scraping TradingView and related UIs for charts, watchlists, or sentiment.
+- Feeding raw HTML or structured data into BrowserAct and Claude for analysis.
+
+### What must be running
+
+- Playwright dependencies installed (usually via `playwright install` and browser downloads).
+- A running service or worker process that executes `tvs_scraper.py` (or the equivalent module under `api/services/tvs/tvs_scraper.py`).
+- Redis/Celery configured if scrapes are triggered asynchronously from API requests.
+
+### Environment variables
+
+Playwright and the TradingView scraper primarily use existing infrastructure configuration (Redis, Celery, Claude/BrowserAct, Supabase) rather than dedicated env vars. Ensure the following are correctly set so scrapes can run end-to-end:
+
+<ParamField body="REDIS_URL" param-type="string" required="true" show-location="false">
+Shared Redis instance used when scraper tasks are enqueued or coordinated via Celery.
+</ParamField>
+
+<ParamField body="CELERY_BROKER_URL" param-type="string" required="true" show-location="false">
+Broker URL that scraper tasks use to communicate with Celery workers.
+</ParamField>
+
+<ParamField body="CELERY_RESULT_BACKEND" param-type="string" required="true" show-location="false">
+Result backend used to track the status and outputs of scraping tasks.
+</ParamField>
+
+<Callout kind="tip">
+If scraping fails silently, first verify that Celery workers are running with the same `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` as the API, then check Playwright installation by running a simple headless browser script locally.
 </Callout>

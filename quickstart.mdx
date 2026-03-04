@@ -1,128 +1,222 @@
 ---
-title: Quickstart Guide
-description: Get up and running with CJL_Org by setting up your account and creating your first documentation space in under 5 minutes.
+title: Quickstart
+description: Run the trading-app-web FastAPI backend and React/Vite frontend locally, with optional Streamlit UI and Celery workers.
 ---
+
+## Overview
+
+Spin up the `trading-app-web` stack locally: FastAPI backend, React/Vite frontend, and optional Streamlit UI and Celery workers.
 
 ## Prerequisites
 
-<Callout kind="info" title="Before You Begin">
+<Callout kind="info">
+
 Ensure you have:
-- A valid email address for account registration
-- A modern web browser like Chrome, Firefox, or Safari
-- Optional: GitHub or GitLab account for version control integration
+
+- Python 3.10 or later
+- Node.js 18 or later and npm
+- Git
+- Optional: Redis (for Celery tasks)
+- Optional: OpenAI/Anthropic keys if you plan to use LLM features
+
 </Callout>
 
-CJL_Org provides a streamlined onboarding process. Complete account setup and your first workspace in minutes.
+Clone the repo into a local directory before starting:
 
-## Sign Up for an Account
-
-Follow these steps to create your CJL_Org account.
-
-<Steps>
-  <Step title="Visit the Dashboard" icon="monitor">
-    Navigate to `https://dashboard.cjlorg.com` in your browser.
-  </Step>
-  <Step title="Register" icon="user-plus">
-    Click **Sign Up** and enter your email, name, and password.
-    
-    <Callout kind="tip">
-      Use a strong password with at least 12 characters.
-    </Callout>
-  </Step>
-  <Step title="Verify Email" icon="mail">
-    Check your inbox for the verification email and click the link.
-  </Step>
-  <Step title="Complete Onboarding" icon="check-circle">
-    Set your workspace preferences and start the tour.
-  </Step>
-</Steps>
-
-## Create Your First Documentation Workspace
-
-Once logged in, create a workspace to organize your docs.
-
-<Steps>
-  <Step title="New Workspace" icon="plus">
-    Click **New Workspace** in the dashboard.
-  </Step>
-  <Step title="Configure Settings" icon="settings">
-    Enter a name like `My Project Docs`, select visibility (public/private), and choose a template.
-  </Step>
-  <Step title="Save and Access" icon="save">
-    Your workspace is ready at `https://docs.cjlorg.com/my-project-docs`.
-  </Step>
-</Steps>
-
-## Upload Your Initial Documents
-
-Add content to your workspace using these methods.
-
-<Tabs>
-  <Tab title="Drag & Drop" icon="upload">
-    Drag files directly into the editor. Supports Markdown, PDFs, and images.
-  </Tab>
-  <Tab title="Git Import" icon="git-branch">
-    Connect your repo:
-    
-````bash
-git remote add cjlorg https://git.cjlorg.com/my-project.git
-git push cjlorg main
-````
-  </Tab>
-  <Tab title="API Upload" icon="api">
-    Use the upload endpoint:
-    
-    <CodeGroup tabs="cURL,JavaScript">
 ```bash
-curl -X POST https://api.example.com/v1/workspaces/my-project-docs/documents \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -F "file=@document.md"
+git clone <REPO_URL>
+cd trading-app-web
 ```
-```javascript
-const formData = new FormData();
-formData.append('file', documentFile);
 
-fetch('https://api.example.com/v1/workspaces/my-project-docs/documents', {
-  method: 'POST',
-  headers: { 'Authorization': 'Bearer YOUR_API_KEY' },
-  body: formData
-});
+## 1. Create a virtual environment and install Python dependencies
+
+Use a Python virtual environment to isolate dependencies.
+
+<Steps>
+  <Step title="Create and activate venv" icon="terminal">
+
+    <CodeGroup tabs="bash (macOS/Linux),bash (Windows PowerShell)">
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+```bash
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
     </CodeGroup>
-  </Tab>
-</Tabs>
 
-## Basic Interface Tour
+    Your shell prompt should show `(.venv)` once the environment is active.
+  </Step>
 
-Explore the main features with this overview.
+  <Step title="Install backend requirements" icon="download">
 
-<Columns cols={3}>
-  <Card title="Editor" icon="edit-3" href="#editor">
-    Real-time Markdown editor with live preview.
-  </Card>
-  <Card title="Version Control" icon="git-branch" href="#versions">
-    Track changes with Git integration.
-  </Card>
-  <Card title="Search" icon="search" href="#search">
-    Full-text search across all documents.
-  </Card>
-</Columns>
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-<Expandable title="Advanced Features" default-open="false">
-  Customize themes, enable comments, and set permissions for collaborators.
-</Expandable>
+    After this completes, `pip list` should show FastAPI, Uvicorn, and other project dependencies.
+  </Step>
+</Steps>
 
-## Next Steps
+## 2. Configure environment variables
 
-<Callout kind="success">
-  Congratulations! Your CJL_Org workspace is live. Dive deeper with these resources.
+Copy the example environment file and set minimum required variables.
+
+<Steps>
+  <Step title="Copy .env template" icon="file-plus">
+
+```bash
+cp .env.example .env
+```
+
+    This creates a local `.env` file that the backend reads at startup.
+  </Step>
+
+  <Step title="Set core variables" icon="settings">
+
+Update `.env` and set at least:
+
+- `ADMIN_USERNAME` to an admin login name, for example `admin`
+- `ADMIN_PASSWORD` to a strong password
+- `SECRET_KEY` to a long random string
+- `DATABASE_URL` to the default SQLite URL if not already set: `sqlite+aiosqlite:///./data/trading.db`
+
+  </Step>
+</Steps>
+
+## 3. Run the FastAPI backend
+
+Start the API server with Uvicorn.
+
+<Steps>
+  <Step title="Start backend server" icon="play-circle">
+
+```bash
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+    On success, the terminal shows logs with `Uvicorn running on http://0.0.0.0:8000`.
+  </Step>
+
+  <Step title="Verify health and docs" icon="check-circle">
+
+Open these URLs in your browser:
+
+- API docs: `http://localhost:8000/docs`
+- Health check: `http://localhost:8000/health`
+
+    You should see the interactive docs UI and a healthy status response.
+  </Step>
+</Steps>
+
+## 4. Run the React/Vite frontend (primary UI)
+
+Run the main web UI that talks to the FastAPI backend.
+
+<Steps>
+  <Step title="Install frontend dependencies" icon="download">
+
+```bash
+cd frontend
+npm install
+```
+
+    Stay in the `frontend` directory for the next command.
+  </Step>
+
+  <Step title="Start Vite dev server" icon="play-circle">
+
+```bash
+npm run dev
+```
+
+    Vite prints a local URL, typically `http://localhost:5173`.
+  </Step>
+
+  <Step title="Open the app" icon="monitor">
+
+    Visit `http://localhost:5173` in your browser.
+
+    Keep both the backend (port 8000) and frontend (port 5173) running in separate terminals.
+  </Step>
+</Steps>
+
+## 5. Optional: Run the Streamlit app (legacy/alt UI)
+
+Use the legacy Streamlit dashboard if you want a quick alternative interface.
+
+<Steps>
+  <Step title="Start Streamlit server" icon="play-circle">
+
+    From the project root with the virtual environment active, run:
+
+```bash
+streamlit run app.py
+```
+
+    Streamlit starts on `http://localhost:8501` by default.
+  </Step>
+
+  <Step title="Access the Streamlit UI" icon="monitor">
+
+    Open `http://localhost:8501` to use the Streamlit-based trading dashboard alongside or instead of the React UI.
+  </Step>
+</Steps>
+
+## 6. Optional: Run Celery workers for background tasks
+
+If your workflows use background jobs, start Celery workers and beat. This requires a running Redis instance configured in `.env`.
+
+<Callout kind="info">
+
+Set a valid Redis URL in your `.env`, for example `REDIS_URL=redis://localhost:6379/0`, before starting Celery.
+
 </Callout>
 
-<Columns cols={2}>
-  <Card title="Authentication" icon="shield" href="/authentication">
-    Secure your workspace with API keys and OAuth.
-  </Card>
-  <Card title="Customization" icon="palette" href="/configuration">
-    Configure themes and integrations.
+<Steps>
+  <Step title="Start Celery worker" icon="zap">
+
+```bash
+celery -A celery_app worker --loglevel=info
+```
+
+    The terminal should show Celery connecting to Redis and waiting for tasks.
+  </Step>
+
+  <Step title="Start Celery beat (scheduler)" icon="clock">
+
+```bash
+celery -A celery_app beat --loglevel=info
+```
+
+    This schedules any periodic tasks defined in the project.
+  </Step>
+</Steps>
+
+## Run a BrowserAct FX report
+
+Generate BrowserAct FX reports once the backend is running.
+
+- Ensure the FastAPI backend is up on port 8000.
+- Use the BrowserAct UI from the React app, or call the `/api/v1/browseract/reports` endpoints directly.
+
+For a guided flow and payload examples, see:
+
+<Columns cols={1}>
+  <Card title="BrowserAct FX reports" icon="bar-chart" href="/browseract-reports" cta="Open guide">
+    Learn how to configure inputs and generate full FX reports using BrowserAct.
   </Card>
 </Columns>
+
+## Recap
+
+At this point you should be able to:
+
+- Hit `http://localhost:8000/docs` and `http://localhost:8000/health`
+- Use the React/Vite UI at `http://localhost:5173`
+- Optionally use the Streamlit UI at `http://localhost:8501`
+- Optionally run Celery workers with Redis for background tasks
+
+Keep the backend and your chosen UI running while you explore features like BrowserAct FX reports and automated trading workflows.

@@ -1,0 +1,106 @@
+---
+title: Forecasting tab guide
+description: Learn how the Forecasting tab is wired into the app, including sidebar grouping, routes, page components, and the forecast API workflow.
+---
+
+<Callout kind="info">
+
+Forecasting lives in sidebar group `forecasting` with title `FORECASTING`. The expanded/collapsed state uses the `sidebar-expanded-sections` localStorage key, so updates to this group id or title must stay in sync with that key handling and the routing setup in `frontend/src/App.tsx`.
+
+</Callout>
+
+## Navigation and routes
+
+Use this section to confirm how the Forecasting tab is registered and which components it renders.
+
+- **Sidebar group id:** `forecasting`
+- **Sidebar group title:** `FORECASTING`
+- **Primary route:** `/forecasting-hub`
+- **Page component:** `frontend/src/pages/ForecastingHub.tsx`
+
+The `/forecasting-hub` route should be defined in `frontend/src/App.tsx` and point to `ForecastingHub.tsx`. Keep the route path, sidebar link, and page component aligned so navigation, deep links, and refresh behavior all work consistently.
+
+<Callout kind="info">
+
+When you add or rename Forecasting routes, update `frontend/src/App.tsx`, the sidebar config that references the `forecasting` group, and any logic that reads or writes the `sidebar-expanded-sections` key.
+
+</Callout>
+
+## Forecasting data flow
+
+Forecasting views typically fetch data through a shared service layer and a hook, rather than calling the backend directly from components.
+
+- **Service module:** `frontend/src/services/forecastApi.ts`
+- **Consumer hooks:** for example, `frontend/src/hooks/useForecasts.ts`
+- **Backend access:** proxied through the app backend under `/api/...` routes
+
+`forecastApi.ts` encapsulates HTTP calls to backend endpoints under `/api/...` and exposes typed methods that the rest of the app uses. Hooks such as `useForecasts.ts` call into this service and provide loading, error, and data state to `ForecastingHub.tsx` and any nested components.
+
+Keeping requests in `forecastApi.ts` and hooks keeps the React tree clean and makes it easier to swap or extend backend endpoints without changing UI logic.
+
+## Typical Forecasting workflow
+
+Follow this high-level workflow when you extend or debug the Forecasting tab.
+
+<Steps>
+
+<Step title="Open the Forecasting hub" icon="monitor">
+
+Use the sidebar group titled `FORECASTING` to navigate to the `/forecasting-hub` route. Confirm that `frontend/src/App.tsx` routes this path to `frontend/src/pages/ForecastingHub.tsx` and that the `forecasting` group is expanded based on the `sidebar-expanded-sections` localStorage value.
+
+</Step>
+
+<Step title="Load forecast data via the service layer" icon="database">
+
+Inside `ForecastingHub.tsx`, rely on a hook such as `useForecasts.ts`, which delegates to `frontend/src/services/forecastApi.ts`. That service should call backend endpoints under `/api/...` and return structured forecast results that the hub view can render and filter.
+
+</Step>
+
+<Step title="Render and iterate on Forecasting UI" icon="settings">
+
+Use the data from the forecast hook to populate charts, tables, or summary cards. When you add new Forecasting features, wire them into the same route, reuse the `forecastApi.ts` service, and keep any new sidebar entries under the `forecasting` group so navigation stays consistent.
+
+</Step>
+
+</Steps>
+
+## Related guides
+
+Use these guides to understand how Forecasting fits alongside the rest of the trading interface.
+
+<Columns cols={3}>
+
+<Card
+  title="Forex tab guide"
+  href="/forex-tab"
+  icon="bar-chart"
+  cta="Open guide"
+>
+
+Learn how the Forex tab is wired and how it sources FX data for research and strategy development.
+
+</Card>
+
+<Card
+  title="Analysis tab guide"
+  href="/analysis-tab"
+  icon="code"
+  cta="Open guide"
+>
+
+See how the Analysis tab organizes charts, indicators, and other tools that often consume forecast outputs.
+
+</Card>
+
+<Card
+  title="TradingView tab guide"
+  href="/tradingview-tab"
+  icon="monitor"
+  cta="Open guide"
+>
+
+Review the TradingView integration and how charting embeds complement Forecasting and Analysis tabs.
+
+</Card>
+
+</Columns>

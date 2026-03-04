@@ -1,0 +1,76 @@
+---
+title: Automaker context files
+description: Learn how the .automaker context files in trading-app-web support AI-assisted development, how they are organized, and how to use them safely.
+---
+
+## What Automaker context files are
+
+Automaker context files are internal Markdown guides under the hidden `.automaker/` directory in the `trading-app-web` GitHub repo. They describe architecture decisions, pipelines, integrations, and implementation details used by AI agents and developers while working on the project.
+
+<Callout kind="info">
+
+Treat Automaker context files as shared design and implementation notes for AI-assisted development. They guide code generation and reviews but are not part of the runtime application.
+
+</Callout>
+
+The `.automaker/context/` folder contains focused guides such as Supabase setup, n8n daily pipelines, RAG and embeddings, web app wiring, and Claude MCP integration. The root `.automaker/app_spec.txt` file holds a larger product and migration spec for the overall trading platform.
+
+## How they are used
+
+AI agents and contributors read these files to:
+
+- Understand how specific subsystems should work (for example, daily n8n jobs or RAG pipelines).
+- Keep generated code aligned with the intended architecture and technology choices.
+- Coordinate backend, frontend, and workflow changes against a single, human-readable spec.
+
+The application does not load or execute anything from `.automaker/`. You can change these files without affecting production behavior, but they strongly influence how agents propose and generate code.
+
+<Callout kind="alert">
+
+Do not store live API keys, secrets, or sensitive customer data in `.automaker/` files. Use environment variables and secret managers for credentials, and keep context files to high-level configuration examples and non-sensitive identifiers.
+
+</Callout>
+
+## Key context documents
+
+Use these Automaker context pages as the primary entry points when working with AI agents on this repo.
+
+<Columns cols={3}>
+
+  <Card title="00-README" href="/automaker-context/readme" icon="book-open">
+    High-level index of the Automaker system, how context files are organized, and how agents should use them during development.
+  </Card>
+
+  <Card title="Project context" href="/automaker-context/project-context" icon="folder">
+    Summary of the trading platform goals, architecture, and major components that anchor all other context files.
+  </Card>
+
+  <Card title="Supabase setup" href="/automaker-context/supabase-setup" icon="database">
+    Supabase schema, auth, and storage conventions used by the app, including how services and agents should interact with them.
+  </Card>
+
+  <Card title="n8n daily pipeline" href="/automaker-context/n8n-daily-pipeline" icon="settings">
+    Design for scheduled n8n workflows that collect data, generate reports, and push updates into the trading application.
+  </Card>
+
+  <Card title="Embedding and RAG" href="/automaker-context/embedding-and-rag" icon="zap">
+    Guidance for vector storage, embedding strategies, and retrieval flows that power AI-assisted research and reporting.
+  </Card>
+
+  <Card title="Web app integration" href="/automaker-context/web-app-integration" icon="monitor">
+    How the React frontend, backend APIs, and background workers connect, including routing patterns and integration points.
+  </Card>
+
+  <Card title="MCP Claude integration" href="/automaker-context/mcp-claude-integration" icon="code">
+    Instructions for exposing project capabilities to Claude via MCP, including tool definitions and context wiring.
+  </Card>
+
+</Columns>
+
+## Working with Automaker context safely
+
+When you edit or add context files:
+
+- Keep them descriptive and implementation-oriented so agents can act on them without guesswork.
+- Avoid duplicating truth that already lives in code or schemas; instead, explain intent, constraints, and non-obvious patterns.
+- Review diffs as carefully as code changes, since context shifts can significantly change future AI-generated proposals.

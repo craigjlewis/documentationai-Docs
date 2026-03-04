@@ -1,120 +1,160 @@
 ---
-title: Introduction to CJL_Org
-description: Discover CJL_Org, your default documentation space for organizing and managing project documentation efficiently.
+title: Introduction to trading-app-web
+description: Understand the trading-app-web monorepo, its backend and frontend components, and how the services fit together for trading and FX reporting.
 ---
 
-<Callout kind="info" title="Starter Kit Template">
-  This documentation was generated as a starter kit template based on your brand. Please review and customize the content to accurately reflect your product's features, APIs, and capabilities.
+<Callout kind="info">
+  This documentation describes the `trading-app-web` GitHub repository: a multi-app codebase that includes a FastAPI backend, React/Vite frontend, Streamlit app, Electron desktop shell, Celery workers, and supporting services.
 </Callout>
 
-## Overview
+## What is trading-app-web?
 
-CJL_Org provides a centralized space for your project documentation. You can create, organize, and collaborate on docs effortlessly. It supports version control, search, and team permissions to keep everything accessible and up-to-date.
+trading-app-web is a full-stack trading application monorepo that combines a FastAPI backend, multiple user interfaces, background task processing, and FX reporting pipelines.
 
-This platform scales with your projects, from small teams to large enterprises. Start by setting up your first workspace and inviting collaborators.
+Use this project as the central entry point for running the trading API, web UI, legacy Streamlit dashboards, an optional Electron desktop wrapper, and the BrowserAct FX report workflow.
 
-## Key Benefits
+## High-level architecture
 
-Organizing documentation manually leads to scattered files and lost information. CJL_Org solves this with:
+The repository groups several apps and services under a single codebase:
 
-- **Centralized Access**: All docs in one secure location.
-- **Team Collaboration**: Real-time editing and comments.
-- **Version History**: Track changes and revert easily.
-- **Search and Discovery**: Full-text search across all content.
-
-<Callout kind="tip">
-  Focus on content creation while CJL_Org handles the organization.
-</Callout>
-
-## Core Features
+- A FastAPI backend that exposes REST endpoints under `api/main.py` with routers mounted under `/api/v1`.
+- A React/Vite frontend stored under `frontend/src` that consumes the backend API.
+- A Streamlit app (`app.py` plus `pages/`) used as a legacy or alternative UI.
+- An Electron desktop app (`electron/main.js`) that wraps the web frontend for desktop usage.
+- Celery workers (`celery_app.py` and `tasks/`) for running asynchronous and scheduled jobs.
+- Database models and migrations using SQLAlchemy and Alembic (`database/`, `migrations/`).
+- A Claude Bridge service under `claude-bridge/` for AI-assisted workflows.
+- A BrowserAct FX report pipeline that spans frontend and backend for FX reporting.
 
 <Columns cols={3}>
-  <Card title="Workspaces" icon="folder" href="#workspaces">
-    Create unlimited workspaces for different projects. Manage permissions per workspace.
+  <Card title="Backend API (FastAPI)" icon="code" href="#backend-api">
+    Core trading and reporting endpoints live under the FastAPI application, with routers organized in `api/v1`.
   </Card>
-  <Card title="Document Editor" icon="edit-3" href="#editor">
-    Rich text editor with markdown support, embeds, and code blocks.
+  <Card title="Frontend UI (React/Vite)" icon="monitor" href="#frontend-ui">
+    Single-page web interface for trading functionality, built with React and Vite under `frontend/src`.
   </Card>
-  <Card title="Search & AI" icon="search" href="#search">
-    Powerful search with AI-powered summaries and tags.
+  <Card title="Streamlit app (legacy/alt UI)" icon="package" href="#streamlit-app">
+    Legacy or alternative UI implemented with Streamlit using `app.py` and page modules.
   </Card>
-  <Card title="Integrations" icon="plug" href="#integrations">
-    Connect with GitHub, Slack, and more for seamless workflows.
+  <Card title="BrowserAct FX reports" icon="bar-chart" href="#browseract-fx-reports">
+    FX reporting flow that connects the BrowserAct page, API route, and transformer/AI services.
+  </Card>
+  <Card title="Automation and tasks" icon="settings" href="#automation-and-tasks">
+    Celery workers, background tasks, and database migrations that support long-running operations.
   </Card>
 </Columns>
 
-## Quick Start Guide
+## Backend API
 
-Get up and running in minutes.
+The backend API is a FastAPI application that exposes core trading, reporting, and support endpoints.
 
-<Steps>
-  <Step title="Create Account" icon="user-plus">
-    Sign up at `https://app.cjl.org/register` with your email.
-  </Step>
-  <Step title="Set Up Workspace" icon="folder-plus">
-    Create your first workspace and invite team members.
-  </Step>
-  <Step title="Create Document" icon="file-plus">
-    Start a new doc and use the editor to add content.
+Key characteristics:
 
-````markdown
-# My First Doc
+- Application entry point at `api/main.py`.
+- Routers grouped under `api/v1` for versioned endpoints.
+- Database access via SQLAlchemy models in the `database/` directory.
+- Schema changes managed via Alembic migrations in `migrations/`.
 
-Welcome to CJL_Org!
+<Callout kind="tip">
+  When you start exploring the code, begin with `api/main.py` and the routers under `api/v1` to understand the primary endpoints and how they are wired.
+</Callout>
 
-- Organize sections
-- Add code blocks
-- Embed images
-````
-  </Step>
-  <Step title="Publish & Share" icon="share-2">
-    Set permissions and share the public link.
-  </Step>
-</Steps>
+## Frontend UI
 
-<Tabs>
-  <Tab title="Markdown" icon="code">
-    Use standard markdown syntax for formatting.
+The primary web UI is a React application bundled with Vite.
 
-````markdown
-```javascript
-// Example code block
-const apiKey = process.env.CJL_API_KEY;
-console.log('Docs ready!');
-```
-````
-  </Tab>
-  <Tab title="API Integration" icon="zap">
-    Fetch docs programmatically.
+- Source code lives under `frontend/src`.
+- Pages and views map onto backend endpoints for trading and reporting flows.
+- The BrowserAct FX report page is implemented in `frontend/src/pages/BrowserAct.tsx` and communicates with the matching backend routes.
 
-````javascript
-const response = await fetch('https://api.example.com/docs', {
-  headers: { Authorization: `Bearer ${YOUR_API_KEY}` }
-});
-const docs = await response.json();
-````
-  </Tab>
-</Tabs>
+Use this UI as the default interface for web-based trading workflows.
 
-## Next Steps
+## Streamlit app
 
-Explore more with these guides:
+The Streamlit app provides a legacy or alternative interface for parts of the trading system.
+
+- Main entry point: `app.py`.
+- Additional pages and flows live under the `pages/` directory.
+- Useful for dashboards, exploratory analysis, or workflows that benefit from Streamlit’s rapid layout primitives.
+
+Treat this as an optional UI layer; the React/Vite frontend is the primary user interface.
+
+## Electron desktop app
+
+The Electron app wraps the web frontend in a desktop shell.
+
+- Entry point: `electron/main.js`.
+- Uses the existing frontend build to display the UI in a desktop window.
+- Suitable when you need a desktop-distributed version of the trading client but want to reuse the same web stack.
+
+## BrowserAct FX reports
+
+BrowserAct FX reports provide a specialized FX reporting pipeline that spans frontend, backend, and AI services.
+
+Key pieces:
+
+- **Frontend page**: `frontend/src/pages/BrowserAct.tsx` implements the BrowserAct reporting interface.
+- **API routes**: FX-related endpoints are defined in `api/routes/browseract_reports.py`.
+- **Services**: Supporting logic for transformer, AI, and Documentero integration is implemented in dedicated service modules.
+
+This pipeline lets you ingest browser activity or FX data, process it via AI services, and generate structured FX reports.
+
+## Automation and tasks
+
+Background processing and automation rely on Celery and database tooling.
+
+- **Celery configuration**: `celery_app.py` defines the Celery application.
+- **Tasks**: The `tasks/` directory contains Celery task definitions for asynchronous workloads such as report generation or data ingestion.
+- **Database**: SQLAlchemy models and session management live under `database/`.
+- **Migrations**: Alembic migration scripts live in `migrations/` to track schema evolution.
+
+Run these services alongside the API to handle long-running or scheduled jobs reliably.
+
+## Claude Bridge service
+
+The Claude Bridge service integrates AI capabilities into the trading stack.
+
+- Located under `claude-bridge/`.
+- Acts as a bridge between the core application and Claude-based AI features.
+- Typically used by backend services or FX/reporting workflows to enrich or analyze data.
+
+Review this service when you need to adjust AI-related behavior, prompts, or integration patterns.
+
+## Repository layout
+
+Use this summary when you are navigating the codebase for the first time:
+
+- `api/` – FastAPI application modules, including `main.py` and routers under `v1`.
+- `frontend/` – React/Vite web application source under `frontend/src`.
+- `pages/` – Streamlit page modules used by `app.py`.
+- `tasks/` – Celery task definitions for background and scheduled jobs.
+- `migrations/` – Alembic migration scripts for database schema changes.
+- `claude-bridge/` – Claude Bridge service code for AI-assisted operations.
+
+## Where to start
+
+If you are new to the repository, a common path is:
+
+- Skim `api/main.py` and the routers to understand available endpoints.
+- Open `frontend/src` and the main routing configuration to see how the UI maps to API calls.
+- Review `frontend/src/pages/BrowserAct.tsx` and `api/routes/browseract_reports.py` if you work specifically on FX reports.
+- Explore `celery_app.py`, `tasks/`, and `migrations/` when you need to touch background jobs or database schema.
+
+## Next steps
+
+Choose where to go next based on what you need to do.
 
 <Columns cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Detailed setup for your first project.
+    Run the API, frontend, and supporting services locally to get a working trading environment.
   </Card>
-  <Card title="Authentication" icon="shield" href="/authentication">
-    Secure your workspaces and API access.
+  <Card title="Features" icon="file-text" href="/features">
+    Review the main trading, reporting, and automation features supported by trading-app-web.
   </Card>
-  <Card title="Advanced Features" icon="settings" href="/guides">
-    Dive into custom integrations and automation.
+  <Card title="Integrations" icon="plug" href="/integrations">
+    See how trading-app-web connects to external services, AI providers, and data sources.
   </Card>
-  <Card title="Changelog" icon="git-branch" href="/changelog">
-    Stay updated with the latest releases.
+  <Card title="BrowserAct FX reports" icon="bar-chart" href="/browseract-reports">
+    Deep dive into the BrowserAct FX reporting flow, endpoints, and UI behavior.
   </Card>
 </Columns>
-
-<Callout kind="success">
-  Ready to start? Create your first workspace now and experience streamlined documentation.
-</Callout>

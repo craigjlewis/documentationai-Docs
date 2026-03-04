@@ -1,0 +1,126 @@
+---
+title: Options tab guide
+description: Understand the Options sidebar group, its routes, page components, and services so you can navigate and extend the Options workflows confidently.
+---
+
+<Callout kind="info">
+
+The Options navigation group is defined in `frontend/src/components/Sidebar.tsx` with id `options` and title `OPTIONS`. React Router routes live in `frontend/src/App.tsx`, and the expanded/collapsed state of sidebar groups (including Options) persists in `localStorage` under the `sidebar-expanded-sections` key.
+
+</Callout>
+
+## Navigation and routes
+
+The Options tab is exposed through a dedicated sidebar group and two primary routes wired in `App.tsx`.
+
+Use this mapping when you trace behavior from the UI into page components and then into services.
+
+- **`/options` → `frontend/src/pages/OptionsAnalysis.tsx`**
+- **`/options-strategy-builder` → `frontend/src/pages/OptionsStrategyBuilder.tsx`**
+
+Both routes are typically rendered inside the main layout that also hosts other trading-related tabs (Forex, Analysis, TradingView).
+
+### Page responsibilities
+
+Each Options page component focuses on a distinct workflow:
+
+- **`OptionsAnalysis.tsx`**  
+  Handles viewing and analyzing option chains, Greeks, pricing scenarios, and related market context.
+
+- **`OptionsStrategyBuilder.tsx`**  
+  Focuses on constructing, editing, and evaluating multi-leg options strategies (for example, spreads and combos) using interactive controls.
+
+When you add new UI behavior, start from the relevant page file, locate the state management and hooks, and follow the imports into shared components or services.
+
+## Data access and services
+
+Options data for these pages is typically loaded via a dedicated frontend service module and proxied through the backend under an `/api/...` namespace.
+
+### Service modules
+
+Expect Options-specific network calls to be organized in:
+
+- **`frontend/src/services/optionsApi.ts`**  
+
+This module usually centralizes:
+
+- Quote and chain fetches for underlying symbols
+- Strategy evaluation or payoff data
+- Any options-related configuration or metadata
+
+Backend calls from `optionsApi.ts` are generally proxied through endpoints under `/api/...`. Check the implementation of `optionsApi.ts` and the backend router to locate the exact paths and payloads instead of hard-coding new URLs.
+
+<Callout kind="tip">
+
+When you introduce new Options API calls, add them to `optionsApi.ts` and keep the routing consistent with existing `/api/...` patterns. Then wire those functions into `OptionsAnalysis.tsx` or `OptionsStrategyBuilder.tsx` via hooks or callbacks.
+
+</Callout>
+
+## Typical developer workflow
+
+Use this sequence when you debug an Options issue or add a new feature.
+
+<Steps>
+
+<Step title="Locate the route and page component" icon="folder">
+
+Open `frontend/src/App.tsx` and confirm whether the behavior belongs to `/options` or `/options-strategy-builder`. Then jump to `OptionsAnalysis.tsx` or `OptionsStrategyBuilder.tsx` to find the JSX and state handling that drive the relevant UI section.
+
+</Step>
+
+<Step title="Trace data flow into services" icon="code">
+
+From the page component, follow imports into `frontend/src/services/optionsApi.ts` and related hooks. Identify which service function loads or mutates the data you care about, and confirm how it maps to the proxied `/api/...` backend call.
+
+</Step>
+
+<Step title="Update logic and verify in the UI" icon="terminal">
+
+Adjust page logic, shared components, or service calls as needed. Reload the Options tab in the web app, navigate via the `OPTIONS` sidebar group, and confirm that the new behavior appears on the correct route and that data loads without errors.
+
+</Step>
+
+</Steps>
+
+## Sidebar behavior and persistence
+
+The `OPTIONS` sidebar group behaves like other groups in the app:
+
+- Expanding or collapsing the group updates a persisted state.
+- The sidebar writes the current set of expanded group ids to `localStorage` using the `sidebar-expanded-sections` key.
+- On reload, the app reads this key and restores the previous expanded/collapsed configuration, including whether `options` is open.
+
+If a user reports that they do not see the Options links, check:
+
+- The `options` group configuration in `Sidebar.tsx`
+- Whether `sidebar-expanded-sections` contains `options` in the stored array
+- Any conditional logic around feature flags or permissions attached to the `OPTIONS` group
+
+## Related guides
+
+Use these related guides to understand how the Options tab fits alongside other analysis and trading views.
+
+<Columns cols={3}>
+
+<Card
+  title="Forex tab guide"
+  href="/forex-tab"
+  icon="bar-chart"
+  cta="View Forex UI and routes"
+/>
+
+<Card
+  title="Analysis tab guide"
+  href="/analysis-tab"
+  icon="chart-line"
+  cta="Explore core analysis flows"
+/>
+
+<Card
+  title="TradingView tab guide"
+  href="/tradingview-tab"
+  icon="monitor"
+  cta="See embedded charting details"
+/>
+
+</Columns>

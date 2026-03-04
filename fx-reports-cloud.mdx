@@ -1,0 +1,339 @@
+---
+title: FX Reports (Cloud)
+description: Configure the FX Reports cloud pipeline with Supabase storage, async Celery processing, and secure environment variables for hosted deployments.
+---
+
+## Cloud FX Reports overview
+
+FX Reports (Cloud) runs the full server-side pipeline in the backend: generate the report HTML, render a PDF via Documentero, write the PDF to local disk on the backend, then upload it to Supabase Storage and record metadata in Supabase tables.
+
+Use this flow when you deploy the FastAPI + Celery backend in a hosted environment and want reports stored centrally in Supabase, not served as local static files only.
+
+<Callout kind="info">
+
+The local/static FX Reports flow serves PDFs directly from the backend file system. The cloud flow always uploads PDFs to Supabase Storage and relies on Supabase tables to track report files and related analysis data.
+
+</Callout>
+
+<Callout kind="info">
+
+The FX Reports (Cloud) navigation group is defined in `frontend/src/components/Sidebar.tsx` with id `fx-reports-cloud` and title `FX REPORTS (CLOUD)`. Routes for this group are configured in `frontend/src/App.tsx`, and sidebar expand/collapse state persists in `localStorage` under the `sidebar-expanded-sections` key.
+
+</Callout>
+
+## Navigation and routes
+
+FX Reports (Cloud) sidebar items and routes:
+
+- **Supabase Reports**
+  - Route: `/supabase-reports`
+  - Frontend: `frontend/src/pages/SupabaseReportList.tsx`
+- **Supabase Pair History**
+  - Route: `/supabase-pairs`
+  - Frontend: `frontend/src/pages/SupabasePairHistory.tsx`
+- **Supabase Trade Performance**
+  - Route: `/supabase-trades`
+  - Frontend: `frontend/src/pages/SupabaseTradePerformance.tsx`
+
+These pages typically call shared Supabase helpers in:
+
+- `frontend/src/services/supabaseClient.ts`
+- `frontend/src/services/supabaseRagApi.ts`
+
+Use these modules to keep Supabase auth, queries, and RAG-style report lookups consistent across the FX Reports (Cloud) UI.
+
+## End-to-end pipeline
+
+The FX Reports cloud pipeline is implemented across FastAPI services and Celery tasks:
+
+1. **Generate FX report content**  
+   The async task in `api/tasks/browseract_fx_report_task.py` orchestrates the long-running FX report generation in the `reports` Celery queue.
+
+2. **Render PDF with Documentero**  
+   The service in `api/services/browseract_documentero_service.py` calls the external Documentero API using:
+
+   - `BROWSERACT_DOCUMENTERO_API_KEY`
+   - `BROWSERACT_DOCUMENTERO_DOCUMENT_ID` (default template id `rVIVPoVEyjICu7Id1DkR`)
+
+   Documentero returns a PDF, which the service writes to the backend file system under a directory configured by `BROWSERACT_FX_REPORT_STORAGE_PATH`.
+
+3. **Save PDF to local disk**  
+   The generated PDF bytes are written to a local directory on the backend host. This path is only a staging location; the cloud flow immediately uploads the file to Supabase Storage.
+
+4. **Upload PDF to Supabase Storage**  
+   The Supabase integration in `api/services/supabase_storage_service.py` uploads the PDF bytes to the Supabase Storage bucket `fx-reports` using server-side REST calls authenticated with:
+
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+
+   Object keys follow the convention:
+
+   ```text
+   {YYYY}/{MM}/{filename}.pdf
+   ```
+
+   For example, the report for 2024‑03‑15 might be stored under:
+
+   ```text
+   2024/03/fx-report-2024-03-15.pdf
+   ```
+
+5. **Persist metadata to Supabase tables**  
+   After upload, the service writes metadata to Supabase tables, including:
+
+   - `daily_reports` with:
+     - `report_date`
+     - `report_file_path` (the Supabase Storage path such as `2024/03/fx-report-2024-03-15.pdf`)
+   - Related detail tables:
+     - `currency_pair_analysis`
+     - `economic_indicators`
+
+These tables let you query which reports exist for a given date and join into the underlying FX analytics.
+
+## Required environment variables
+
+Configure the following environment variables in your hosted deployment to enable the FX Reports cloud pipeline.
+
+### Documentero and local storage
+
+<ParamField body="BROWSERACT_DOCUMENTERO_API_KEY" param-type="string" required="true" show-location="false">
+
+API key for the Documentero service used by `api/services/browseract_documentero_service.py` to render FX Reports as PDFs.
+
+</ParamField>
+
+<ParamField body="BROWSERACT_DOCUMENTERO_DOCUMENT_ID" param-type="string" required="true" show-location="false">
+
+Documentero template id for FX Reports. The default template referenced in the repo is `rVIVPoVEyjICu7Id1DkR`. Override this if you use a custom template in your Documentero account.
+
+</ParamField>
+
+<ParamField body="BROWSERACT_FX_REPORT_STORAGE_PATH" param-type="string" required="true" show-location="false">
+
+Absolute path on the backend host where generated FX report PDFs are first written before upload to Supabase Storage.
+
+</ParamField>
+
+### Supabase storage and metadata
+
+<ParamField body="SUPABASE_URL" param-type="string" required="true" show-location="false">
+
+Base URL of your Supabase project, used by `api/services/supabase_storage_service.py` for server-side REST calls.
+
+</ParamField>
+
+<ParamField body="SUPABASE_SERVICE_ROLE_KEY" param-type="string" required="true" show-location="false">
+
+Service role key for your Supabase project. The storage service uses this key to upload PDFs to the `fx-reports` bucket and write metadata to Supabase tables (`daily_reports`, `currency_pair_analysis`, `economic_indicators`).
+
+</ParamField>
+
+<Callout kind="danger">
+
+Keep `SUPABASE_SERVICE_ROLE_KEY` strictly server-side. Never expose it in client-side code, browser bundles, or public configuration. Treat it like a database root credential.
+
+</Callout>
+
+### Celery and Redis for async processing
+
+Celery powers async FX report generation in `api/tasks/browseract_fx_report_task.py`, using Redis as the broker and result backend.
+
+<ParamField body="CELERY_BROKER_URL" param-type="string" required="true" show-location="false">
+
+Connection URL for the Celery broker (Redis) used to enqueue FX report jobs. The FX task runs in the `reports` queue.
+
+</ParamField>
+
+<ParamField body="CELERY_RESULT_BACKEND" param-type="string" required="true" show-location="false">
+
+Celery result backend URL (typically Redis) used to store task states and results for polling.
+
+</ParamField>
+
+<ParamField body="REDIS_URL" param-type="string" required="false" show-location="false">
+
+Redis URL used in some setups for shared configuration between Celery and other services. Set this if your deployment expects a unified Redis configuration.
+
+</ParamField>
+
+## Understanding async FX generation with Celery
+
+Async generation offloads the FX report job to Celery so HTTP requests stay responsive.
+
+### Task execution and queues
+
+- The FX report task lives in `api/tasks/browseract_fx_report_task.py`.
+- Celery workers listen on the `reports` queue.
+- When the API endpoint to generate an FX Report is called, the backend:
+  - Enqueues a job to the `reports` queue.
+  - Returns a Celery `task_id` immediately instead of blocking.
+
+<Callout kind="tip">
+
+Run at least one Celery worker bound to the `reports` queue to process FX jobs. If no worker subscribes to this queue, FX report tasks will remain pending.
+
+</Callout>
+
+### Polling for status and results
+
+The backend uses `CELERY_RESULT_BACKEND` (and Redis) to track task state. The typical lifecycle is:
+
+1. Client triggers a report generation request.
+2. Backend enqueues the Celery task and returns a `task_id`.
+3. Client polls a status endpoint or the backend checks Celery state internally using the `task_id`.
+4. When the task finishes:
+   - The PDF is uploaded to the `fx-reports` bucket.
+   - Supabase tables are updated with `report_date`, `report_file_path`, and related FX analysis rows.
+
+Your API layer (documented separately) exposes how to trigger and poll for FX reports; the cloud pipeline described here runs behind those endpoints.
+
+## Supabase storage details
+
+The FX Reports cloud pipeline writes to Supabase Storage and tables as follows.
+
+### Storage bucket and object paths
+
+- **Bucket name:** `fx-reports`
+- **Path convention:** `{YYYY}/{MM}/{filename}.pdf`
+
+Example for a March 2024 report:
+
+```text
+Bucket: fx-reports
+Path:   2024/03/fx-report-2024-03-15.pdf
+```
+
+The `report_file_path` field in `daily_reports` stores the object path relative to the bucket (for example, `2024/03/fx-report-2024-03-15.pdf`).
+
+### Metadata tables
+
+The storage service updates the following Supabase tables:
+
+- **`daily_reports`**
+  - `report_date` — the date the report covers.
+  - `report_file_path` — the Supabase Storage path of the PDF in the `fx-reports` bucket.
+
+- **`currency_pair_analysis`**
+  - Stores per-currency-pair analysis data linked to a specific daily report.
+
+- **`economic_indicators`**
+  - Captures macroeconomic indicators included in the report, linked back to `daily_reports`.
+
+Use these tables to query which reports exist, where PDFs are stored, and to join into detailed analysis data.
+
+## Setup and verification steps
+
+Use this sequence to bring up the FX Reports cloud pipeline and verify it is storing PDFs in Supabase correctly.
+
+<Steps>
+
+<Step title="Configure environment variables" icon="settings" titleType="h3">
+
+Set all required environment variables in your deployment configuration (Docker compose, Kubernetes `Deployment`, or process manager).
+
+- Documentero: `BROWSERACT_DOCUMENTERO_API_KEY`, `BROWSERACT_DOCUMENTERO_DOCUMENT_ID`
+- Local storage: `BROWSERACT_FX_REPORT_STORAGE_PATH`
+- Supabase: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- Celery/Redis: `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `REDIS_URL` (if your setup expects it)
+
+Restart the FastAPI app and Celery workers after updating configuration.
+
+</Step>
+
+<Step title="Start Celery workers for the reports queue" icon="terminal" titleType="h3">
+
+Run Celery workers so they can process FX report tasks in the `reports` queue.
+
+<CodeGroup tabs="Shell,cURL" show-lines={true}>
+
+```bash
+# Example Celery worker startup (adapt to your project module)
+CELERY_BROKER_URL=redis://localhost:6379/0 \
+CELERY_RESULT_BACKEND=redis://localhost:6379/0 \
+SUPABASE_URL=https://your-project.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.service-role-key \
+BROWSERACT_DOCUMENTERO_API_KEY=docu_live_Rke2NfN4xM1a9Q0tP4dA \
+BROWSERACT_DOCUMENTERO_DOCUMENT_ID=rVIVPoVEyjICu7Id1DkR \
+BROWSERACT_FX_REPORT_STORAGE_PATH=/var/app/fx-reports \
+celery -A api.tasks.browseract_fx_report_task worker -Q reports --loglevel=INFO
+```
+
+```bash
+# Trigger an example FX report via your HTTP API
+# Replace the URL with your deployed FastAPI endpoint for FX report generation.
+curl -X POST https://api.trading-app.internal/v1/fx/reports/daily \
+  -H "Content-Type: application/json" \
+  -d '{
+    "report_date": "2024-03-15"
+  }'
+```
+
+</CodeGroup>
+
+On success, the HTTP response should include a `task_id` for the FX report generation job.
+
+</Step>
+
+<Step title="Poll for completion and confirm Supabase upload" icon="check-circle" titleType="h3">
+
+After you receive a `task_id`, poll your backend status endpoint (or use internal Celery tooling) until the FX task is marked as succeeded.
+
+Once completed:
+
+- Check Supabase Storage:
+  - Go to the `fx-reports` bucket.
+  - Confirm a new object exists under `{YYYY}/{MM}/{filename}.pdf` for your `report_date`.
+- Inspect Supabase tables:
+  - `daily_reports` should contain a row with:
+    - `report_date` equal to the requested date.
+    - `report_file_path` matching the new object path.
+  - Related rows should appear in `currency_pair_analysis` and `economic_indicators` for that report.
+
+If both storage and metadata are present, the FX Reports cloud pipeline is working correctly.
+
+</Step>
+
+</Steps>
+
+## Retrieving the PDF from Supabase
+
+After upload, downstream services and operators can use the Supabase REST APIs or client libraries to access the stored PDF, using the `report_file_path` from `daily_reports`.
+
+<CodeGroup tabs="Shell,Shell (signed URL)" show-lines={true}>
+
+```bash
+# Download the PDF object directly from Supabase Storage REST
+# Use SUPABASE_SERVICE_ROLE_KEY or another server-side key that has access to the fx-reports bucket.
+curl -X GET \
+  "https://your-project.supabase.co/storage/v1/object/fx-reports/2024/03/fx-report-2024-03-15.pdf" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.service-role-key" \
+  -o fx-report-2024-03-15.pdf
+```
+
+```bash
+# Example: call your own backend endpoint that proxies or signs access
+# This keeps SUPABASE_SERVICE_ROLE_KEY private and returns a downloadable URL or stream.
+curl -X GET \
+  "https://api.trading-app.internal/v1/fx/reports/daily/2024-03-15/download" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.user-session-token" \
+  -o fx-report-2024-03-15.pdf
+```
+
+</CodeGroup>
+
+<Callout kind="tip">
+
+Expose user-facing download endpoints from your backend instead of calling Supabase Storage directly from the browser with the service role key. Use Supabase client libraries or backend logic to generate signed URLs or stream the file.
+
+</Callout>
+
+## Security considerations
+
+- **Service role key scope**  
+  `SUPABASE_SERVICE_ROLE_KEY` can bypass row-level security in Supabase. Restrict its usage to backend services that need to upload PDFs and write FX metadata.
+- **Client access**  
+  Do not embed `SUPABASE_SERVICE_ROLE_KEY` in frontend code. For client downloads, route requests through your backend or use signed URLs generated server-side.
+- **Storage path design**  
+  The `{YYYY}/{MM}/{filename}.pdf` convention keeps storage predictable and partitioned by month, which simplifies permissions and retention policies you may apply at the bucket or folder level.
+
+With these pieces in place, your hosted FastAPI + Celery deployment will generate FX Reports as PDFs, store them in Supabase Storage, and maintain a queryable history of reports and their analysis in Supabase tables.

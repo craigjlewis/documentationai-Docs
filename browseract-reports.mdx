@@ -1,0 +1,617 @@
+---
+title: BrowserAct FX Reports
+description: Generate, validate, and troubleshoot the BrowserAct-based FX PDF report pipeline (scrape, transform, AI, Documentero PDF) end-to-end.
+---
+
+## Overview
+
+BrowserAct FX Reports aggregate data from 26 FX tools, run a multi-wave AI analysis, and produce a PDF strategy report via Documentero. This guide shows you how to run the pipeline end-to-end, understand the API surface, and debug common failures when operating the trading-app-web project.
+
+The feature spans:
+
+- Frontend UI: `frontend/src/pages/BrowserAct.tsx`
+- API routes: `api/routes/browseract_reports.py`
+- Services: `api/services/browseract_fx_transformer.py`, `browseract_ai_analysis.py`, `browseract_documentero_service.py`
+- Tasks: `tasks/browseract_tasks.py`
+- DB models: `database/models_browseract.py`
+
+## Prerequisites and runtime components
+
+You need several processes and integrations online before any FX report can succeed.
+
+<Callout kind="info">
+
+Start all required runtime components before triggering FX report generation. If any of these are down, requests either fail immediately or hang for a long time.
+
+</Callout>
+
+### Required services
+
+Run these processes in your development or hosting environment:
+
+- **API backend**: `uvicorn api.main:app` (FastAPI app exposing `/api/v1/browseract/reports/*`)
+- **Frontend**: Vite dev server serving the trading UI that includes the BrowserAct page
+- **Claude Bridge**: `node claude-bridge/src/index.js` listening on `localhost:3009` for scraping and AI calls
+- **Redis + Celery worker/beat**: Required for asynchronous FX generation tasks and long-running `/fx/generate-full` jobs
+
+If you use only synchronous endpoints, Redis/Celery are still recommended but the core sync calls can run directly in the API process as configured in the repo.
+
+### Environment configuration
+
+Environment variables configure Claude access, the bridge URL, background processing, PDF generation, and optional Supabase storage. The names below reflect `.env.example` and `api/core/config.py`.
+
+<Callout kind="info">
+
+No dedicated Documentero base URL environment variable appears in `.env.example` or `api/core/config.py`. The base URL is likely hardcoded or defaulted in code; only the API keys are configurable via env vars.
+
+</Callout>
+
+<ParamField body="CLAUDE_API_KEY" param-type="string" required="false" show-location="false">
+
+Primary API key for Claude access. If unset, the code falls back to `ANTHROPIC_API_KEY`. Set at least one of these to enable AI and scraping.
+
+</ParamField>
+
+<ParamField body="ANTHROPIC_API_KEY" param-type="string" required="false" show-location="false">
+
+Fallback API key used when `CLAUDE_API_KEY` is not set. Use this if your existing infrastructure already relies on `ANTHROPIC_API_KEY`.
+
+</ParamField>
+
+<ParamField body="CLAUDE_BRIDGE_URL" param-type="string" required="false" show-location="false">
+
+URL of the Claude Bridge process used for scraping and AI calls. Defaults to `http://localhost:3009` when unset.
+
+</ParamField>
+
+<ParamField body="REDIS_URL" param-type="string" required="true" show-location="false">
+
+Redis connection URL used by Celery as both broker and result backend in many setups. Required for asynchronous FX report processing.
+
+</ParamField>
+
+<ParamField body="CELERY_BROKER_URL" param-type="string" required="true" show-location="false">
+
+Celery broker URL. Often points at the same Redis instance as `REDIS_URL`, but defined separately so you can route Celery traffic independently.
+
+</ParamField>
+
+<ParamField body="CELERY_RESULT_BACKEND" param-type="string" required="true" show-location="false">
+
+Celery result backend URL, used to persist task states and results for async FX report jobs.
+
+</ParamField>
+
+<ParamField body="DOCUMENTERO_API_KEY" param-type="string" required="false" show-location="false">
+
+General API key for authenticating with Documentero. Shared across features that generate PDFs, not limited to BrowserAct.
+
+</ParamField>
+
+<ParamField body="BROWSERACT_DOCUMENTERO_API_KEY" param-type="string" required="false" show-location="false">
+
+BrowserAct-specific Documentero API key. When set, the BrowserAct pipeline uses this key instead of the general `DOCUMENTERO_API_KEY`, allowing isolated access control or rate limits for FX reports.
+
+</ParamField>
+
+<ParamField body="SUPABASE_URL" param-type="string" required="false" show-location="false">
+
+Supabase project URL used when uploading generated PDFs or related metadata to Supabase storage.
+
+</ParamField>
+
+<ParamField body="SUPABASE_ANON_KEY" param-type="string" required="false" show-location="false">
+
+Supabase anonymous key for client-side or limited-access operations. Optional for BrowserAct, depending on how you expose files.
+
+</ParamField>
+
+<ParamField body="SUPABASE_SERVICE_ROLE_KEY" param-type="string" required="false" show-location="false">
+
+Supabase service role key used for server-side operations such as writing PDFs or metadata to storage and tables with elevated permissions.
+
+</ParamField>
+
+## How the FX report pipeline works
+
+The BrowserAct FX pipeline is a fixed sequence of stages that starts from raw web data and ends with a stored PDF.
+
+1. **Scrape FX tools**
+
+   The backend calls Claude Bridge to scrape 26 tools (news, calendars, dashboards, etc.) and returns a batch of structured FX data.
+
+2. **Transform to FXReportData**
+
+   `browseract_fx_transformer.py` converts the raw batch into a normalized `FXReportData` structure, grouping content into currency pairs, events, and macro views. You can validate this step alone via `/fx/validate`.
+
+3. **AI analysis (7 waves)**
+
+   `browseract_ai_analysis.py` runs multiple prompt “waves” over the transformed data:
+
+   - Macro analysis
+   - Pair-level analysis
+   - Executive and strategy summaries
+   - Consistency and quality review
+
+   An internal quality gate aborts the report if an AI fallback threshold is exceeded. When more than roughly 80% of fields fall back to defaults, the report is considered unreliable and fails.
+
+4. **PDF generation via Documentero**
+
+   `browseract_documentero_service.py` sends the analyzed data and template id (default `rVIVPoVEyjICu7Id1DkR`) to Documentero. Documentero returns a PDF binary that the backend writes to disk and optionally uploads to Supabase storage and records in the database.
+
+5. **Storage and serving**
+
+   The generated PDF is stored under a local directory such as `browseract_reports/`. The API exposes this directory through a static files mount at `/api/v1/browseract/reports/files/*`.
+
+<Callout kind="tip">
+
+Use `/fx/validate` before long-running full generations to confirm that the scrape and transform stages succeed with your current environment.
+
+</Callout>
+
+## Generate a report from the UI
+
+The easiest way to produce a report locally is through the BrowserAct page in the frontend.
+
+<Steps>
+
+<Step title="Start backend, frontend, and Claude Bridge" icon="play-circle">
+
+Make sure all core services are running.
+
+<CodeGroup tabs="Backend,Frontend,Claude Bridge" show-lines={false}>
+
+```bash
+# Backend (from repo root or api directory)
+uvicorn api.main:app --reload --port 8000
+```
+
+```bash
+# Frontend
+cd frontend
+npm install
+npm run dev
+```
+
+```bash
+# Claude Bridge
+cd claude-bridge
+npm install
+node src/index.js
+```
+
+</CodeGroup>
+
+When everything is online, you should see:
+
+- Backend: `Uvicorn running on http://127.0.0.1:8000`
+- Frontend: Vite dev server URL (`http://localhost:5173` by default)
+- Claude Bridge: console output confirming it is listening on port `3009`
+
+</Step>
+
+<Step title="Open the BrowserAct FX page" icon="monitor">
+
+Navigate to the frontend in your browser and open the BrowserAct section (implemented in `frontend/src/pages/BrowserAct.tsx`).
+
+From this page, you can trigger FX report generation, either synchronously or asynchronously, depending on how the UI is wired to the API endpoints.
+
+</Step>
+
+<Step title="Trigger a full FX report" icon="zap">
+
+Use the UI control that triggers the **full pipeline** (scrape → transform → AI → PDF).
+
+- The UI typically calls `/api/v1/browseract/reports/fx/generate-full` or one of the generate endpoints.
+- Expect long runtimes for full runs (30–60 minutes is typical, depending on network and AI performance).
+
+<Callout kind="alert">
+
+A full BrowserAct FX report run can take up to an hour. Do not assume failure if the request appears idle; monitor backend logs and Celery workers for progress instead of re-triggering repeatedly.
+
+</Callout>
+
+Successful runs should surface:
+
+- A completion state in the UI
+- A link or filename for the generated PDF
+- Optional metadata (run id, date) from the SyncFXReportResponse or async task status
+
+</Step>
+
+<Step title="Verify the PDF output" icon="check-circle">
+
+Open the generated PDF from the link exposed in the UI or by hitting the static files route manually.
+
+- Confirm that macro and pair analyses are populated.
+- Check that the report date, run id, and strategy sections look reasonable.
+- If the report is missing large sections or appears generic, review backend logs for AI fallback or Documentero errors.
+
+</Step>
+
+</Steps>
+
+## Generate a report via the API
+
+You can bypass the frontend and hit the BrowserAct FX endpoints directly when debugging or automating tasks.
+
+### Using `fx/generate-sync`
+
+Use the synchronous endpoint when you want immediate feedback and can tolerate the runtime.
+
+<Callout kind="info">
+
+The exact request fields below are taken from `GenerateFXReportRequest` and related schemas in `api/schemas/browseract.py`.
+
+</Callout>
+
+#### Request fields
+
+<ParamField body="browseract_run_id" param-type="string" required="true" show-location="false">
+
+Identifier for an existing BrowserAct run in storage or the database. The sync endpoint ties the FX report to this run for logs, DB records, and file naming. If you do not already have a stored run id, use `/fx/generate-full` to create a new run and report in one call instead of inventing an id here.
+
+</ParamField>
+
+<ParamField body="include_technical" param-type="boolean" required="false" show-location="false">
+
+Whether to include technical analysis in the report. Defaults to `true`.
+
+</ParamField>
+
+<ParamField body="include_sentiment" param-type="boolean" required="false" show-location="false">
+
+Whether to include sentiment analysis in the report. Defaults to `true`.
+
+</ParamField>
+
+<ParamField body="include_economic" param-type="boolean" required="false" show-location="false">
+
+Whether to include economic event coverage in the report. Defaults to `true`.
+
+</ParamField>
+
+<ParamField body="include_macro" param-type="boolean" required="false" show-location="false">
+
+Whether to include macro-level analysis in the report. Defaults to `true`.
+
+</ParamField>
+
+<ParamField body="documentero_template_id" param-type="string" required="false" show-location="false">
+
+Optional override for the Documentero template id. The default template is `rVIVPoVEyjICu7Id1DkR`.
+
+</ParamField>
+
+<ParamField body="use_sample_data" param-type="boolean" required="false" show-location="false">
+
+When `true`, uses bundled sample batch data instead of scraping live sources. Defaults to `false`.
+
+</ParamField>
+
+#### Example cURL call
+
+<CodeGroup tabs="cURL" show-lines={false}>
+
+```bash
+curl -X POST \
+  http://localhost:8000/api/v1/browseract/reports/fx/generate-sync \
+  -H "Content-Type: application/json" \
+  -d '{
+    "browseract_run_id": "fx_run_existing_2024_06_10",
+    "include_technical": true,
+    "include_sentiment": true,
+    "include_economic": true,
+    "include_macro": true,
+    "documentero_template_id": "rVIVPoVEyjICu7Id1DkR",
+    "use_sample_data": false
+  }'
+```
+
+</CodeGroup>
+
+### Response fields (SyncFXReportResponse)
+
+The sync endpoint returns metadata about the generation and the location of the PDF.
+
+<ResponseField name="success" field-type="boolean" required="true">
+
+Indicates whether the PDF generation pipeline completed successfully end-to-end.
+
+</ResponseField>
+
+<ResponseField name="pdf_url" field-type="string">
+
+Public or internal URL to access the generated PDF, often under `/api/v1/browseract/reports/files/...`.
+
+</ResponseField>
+
+<ResponseField name="pdf_filename" field-type="string">
+
+Name of the generated PDF file on disk, typically used to build or confirm the `pdf_url`.
+
+</ResponseField>
+
+<ResponseField name="message" field-type="string" required="true">
+
+Human-readable status message, including error details when `success` is `false`.
+
+</ResponseField>
+
+<ResponseField name="browseract_run_id" field-type="string" required="true">
+
+Echo of the run id from the request, useful when correlating with logs or database records.
+
+</ResponseField>
+
+<ResponseField name="report_date" field-type="string">
+
+Report date string used in the PDF and metadata. Format depends on the implementation.
+
+</ResponseField>
+
+<ResponseField name="data_summary" field-type="object">
+
+Optional summary of the transformed data set (for example, number of pairs, events, or macros). Exact structure depends on `browseract_fx_transformer.py`.
+
+</ResponseField>
+
+<ResponseField name="error" field-type="string">
+
+Error details when the pipeline fails (Claude Bridge, AI quality gate, Documentero, or storage issues).
+
+</ResponseField>
+
+<ResponseField name="generated_at" field-type="string" required="true">
+
+Timestamp when the pipeline finished, in the server’s time zone or UTC depending on configuration.
+
+</ResponseField>
+
+### Async generation
+
+The async endpoint (`/fx/generate`) responds quickly and offloads heavy work to Celery.
+
+Async responses follow `AsyncFXReportResponse`:
+
+<ResponseField name="task_id" field-type="string" required="true">
+
+Celery task identifier used to track progress of the long-running FX generation.
+
+</ResponseField>
+
+<ResponseField name="status" field-type="string" required="true">
+
+Current status of the task at response time, such as `queued` or `started`.
+
+</ResponseField>
+
+<ResponseField name="message" field-type="string" required="true">
+
+Short description of the task state or any immediate validation result.
+
+</ResponseField>
+
+<ResponseField name="browseract_run_id" field-type="string" required="true">
+
+Run id tied to this background task, matching any sync run id conventions you use.
+
+</ResponseField>
+
+<ResponseField name="estimated_completion_seconds" field-type="integer">
+
+Optional rough estimate of how long the job will take to finish, if the implementation can calculate it.
+
+</ResponseField>
+
+## API endpoints
+
+The BrowserAct FX router is mounted under `/api/v1/browseract/reports` with the following FX endpoints:
+
+- **POST `/fx/generate`**  
+  Async generation. Starts a background task for FX report creation and returns a `task_id` so you can poll elsewhere.
+
+- **POST `/fx/generate-sync`**  
+  Synchronous generation from the standard data pipeline. Blocks until the PDF is ready or an error occurs, then returns a `SyncFXReportResponse`.
+
+- **POST `/fx/generate-from-data`**  
+  Synchronous generation when you already have `batch_data`. Accepts a `BrowserActDataRequest` with `batch_data` plus `include_*` flags and `documentero_template_id`.
+
+- **POST `/fx/generate-full`**  
+  Full scrape + transform + AI + PDF in one call. This is the most comprehensive and longest-running flow, suitable for scheduled reports or manual runs where you want everything fresh.
+
+- **POST `/fx/validate`**  
+  Validates the transform stage only. Runs the scrape and transform into `FXReportData` and surfaces issues before AI and Documentero stages.
+
+<Callout kind="info">
+
+Use `/fx/validate` when you suspect scraper or transformer issues, and reserve `/fx/generate-full` for known-good sources or scheduled tasks.
+
+</Callout>
+
+## Where files are stored
+
+The FX report pipeline writes PDFs to a local `browseract_reports/` directory and exposes them over HTTP.
+
+- **Local directory**: Under the project root, within a folder such as `browseract_reports/` (exact path in `browseract_documentero_service.py` or related config).
+- **Static files route**: FastAPI mounts this directory at:
+
+  - `/api/v1/browseract/reports/files/*`
+
+To fetch a PDF once you know the filename:
+
+<CodeGroup tabs="cURL" show-lines={false}>
+
+```bash
+curl -o fx-report.pdf \
+  "http://localhost:8000/api/v1/browseract/reports/files/your_filename_here.pdf"
+```
+
+</CodeGroup>
+
+If Supabase storage is configured, the pipeline may also upload the PDF there and store the public URL in the database, in addition to the local file.
+
+## Validating the transform stage
+
+Before investing 30–60 minutes on a full run, validate that the scraped data transforms correctly.
+
+<Steps>
+
+<Step title="Call the validate endpoint" icon="terminal">
+
+Send a request to `/api/v1/browseract/reports/fx/validate`. This endpoint expects a `BrowserActDataRequest` body, which includes a `batch_data` object plus the same `include_*` flags and optional `documentero_template_id` used elsewhere.
+
+Because the exact shape of `batch_data` depends on what the scraper produces, treat it as **real scraped data** from your environment, not a hard-coded stub.
+
+<CodeGroup tabs="cURL" show-lines={false}>
+
+```bash
+curl -X POST \
+  http://localhost:8000/api/v1/browseract/reports/fx/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "batch_data": {
+      // Replace this object with actual scraped BrowserAct batch data.
+      // For example, use the raw output that would normally feed the FX transformer.
+    },
+    "include_technical": true,
+    "include_sentiment": true,
+    "include_economic": true,
+    "include_macro": true,
+    "documentero_template_id": "rVIVPoVEyjICu7Id1DkR"
+  }'
+```
+
+</CodeGroup>
+
+On success, you should see a response indicating the transform completed and optionally a summary of the resulting `FXReportData`.
+
+</Step>
+
+<Step title="Review validation output" icon="check">
+
+Inspect the response payload and backend logs:
+
+- Look for counts of pairs, events, and macro items.
+- Confirm there are no obvious data gaps (for example, empty arrays where you expect content).
+- Fix any scraper or network issues highlighted here before running `generate-full`.
+
+</Step>
+
+</Steps>
+
+## Troubleshooting
+
+This section lists common failure modes observed in the BrowserAct FX pipeline and how to address them.
+
+### Claude Bridge unavailable
+
+Symptom:
+
+- Requests to `/fx/generate-*` fail early with messages suggesting the bridge is unavailable.
+- Logs show `check_bridge_available` failures or connection errors to `localhost:3009`.
+
+Cause:
+
+- The Claude Bridge process is not running or is bound to a different host/port.
+
+Fix:
+
+<Callout kind="alert">
+
+Restart the Claude Bridge process and confirm that the URL configured in the backend matches its actual host and port. Avoid running multiple bridge instances on conflicting ports.
+
+</Callout>
+
+Then retry `/fx/validate` to confirm that scraping now succeeds before attempting full generation.
+
+### Long timeouts on `generate-full`
+
+Symptom:
+
+- `/fx/generate-full` requests appear to hang for 30–60 minutes.
+- The client or reverse proxy times out, even though the backend continues processing.
+
+Cause:
+
+- Full scrape + AI + PDF runs are inherently long-running.
+- Synchronous calls through load balancers or API gateways often have lower timeout limits than the actual runtime.
+
+Fix:
+
+- Prefer the **async** `/fx/generate` endpoint for long-running jobs.
+- Increase client or reverse proxy timeouts if you must use sync endpoints.
+- Monitor Celery worker logs to distinguish between genuine stalls and slow normal progress.
+
+<Callout kind="info">
+
+A 30–60 minute runtime can be normal for complete FX reports. Investigate only when logs show repeated errors, task restarts, or AI fallbacks exceeding thresholds.
+
+</Callout>
+
+### AI fallback threshold exceeded
+
+Symptom:
+
+- Sync responses return `success = false` with messages indicating excessive fallbacks or low-quality AI output.
+- The PDF is not generated or is missing large sections.
+
+Cause:
+
+- The multi-wave AI analysis applies quality gates. When more than roughly 80% of AI fields fall back to defaults, the pipeline aborts to avoid low-quality reports.
+
+Fix:
+
+- Inspect `browseract_ai_analysis.py` logs to identify which prompts or sections are failing.
+- Verify that the transform output contains rich, non-empty content; poor inputs often lead to AI confusion.
+- If you work against rate limits or transient AI errors, retry with a fresh run id after waiting a bit.
+
+### Documentero failures or payload too large
+
+Symptom:
+
+- Logs report errors during the PDF creation step, often mentioning payload size or template rendering issues.
+- Response contains an `error` message related to Documentero.
+
+Cause:
+
+- The transformed and analyzed data payload may exceed Documentero limits.
+- The template id may be invalid, deleted, or misconfigured.
+- Network/authentication errors between the backend and Documentero.
+
+Fix:
+
+<Callout kind="alert">
+
+Confirm that the template id (default `rVIVPoVEyjICu7Id1DkR`) exists in your Documentero account and that the Documentero API key is valid and authorized.
+
+</Callout>
+
+Then:
+
+- Reduce payload size if possible (for example by trimming extreme data sets).
+- Check `DOCUMENTERO_API_KEY` or `BROWSERACT_DOCUMENTERO_API_KEY` configuration.
+- Inspect Documentero-specific logs or dashboards if available.
+
+### When in doubt: check `/fx/validate` first
+
+If you are unsure which stage is failing:
+
+1. Run `/fx/validate` to isolate scrape/transform issues.
+2. If validation passes, run a sync or async generate endpoint.
+3. Use the `browseract_run_id` to correlate:
+
+   - API logs
+   - Celery logs
+   - Stored PDF filenames
+   - Database records in `models_browseract.py`
+
+Consistently using descriptive run ids (for example `fx_london_session_2024_06_10`) makes cross-system debugging much simpler.
+
+## Next steps
+
+Once you are comfortable generating and debugging FX reports:
+
+- Wire `/fx/generate` into your scheduling system (cron, Airflow, or application-level scheduler).
+- Extend `BrowserAct.tsx` to expose additional run options (for example toggling `include_macro` or switching templates).
+- Monitor runtime and error rates to tune timeouts, concurrency, and AI settings in your deployment.

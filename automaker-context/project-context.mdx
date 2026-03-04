@@ -1,0 +1,119 @@
+---
+title: Project context for AI automaker agents
+description: Understand the trading platform tech stack, repo layout, key entrypoints, and run commands so you can navigate and extend the codebase confidently.
+---
+
+## Overview
+
+Work in this repository centers on an AI-assisted trading platform with a React frontend and a FastAPI backend. Understanding the tech stack and key entrypoints makes it easier to build and evaluate agents that interact with the system.
+
+<Callout kind="info">
+
+Use this page as a quick orientation when you first open the repo or switch back to it after a break. It highlights where things live and how to run the core services.
+
+</Callout>
+
+## Tech stack
+
+The platform uses a modern web stack optimized for async APIs and rich client-side interaction:
+
+- **Frontend**
+  - React 19
+  - TypeScript
+  - Vite
+  - TailwindCSS v4
+  - React Query v5 for data fetching and caching
+- **Backend**
+  - FastAPI for HTTP APIs
+  - SQLAlchemy 2.0 async for database access
+  - SQLite as the primary database
+- **Authentication**
+  - JWT access tokens
+  - Refresh tokens for session continuity
+
+These choices give agents and tools a stable, well-typed surface for calling endpoints and reasoning about application state.
+
+## Repository layout
+
+Use this summary when you are navigating the codebase for the first time:
+
+- `api/` – FastAPI application modules, including `main.py` and versioned routers under `v1`.
+- `api/main.py` – Application factory, middleware, and router registration.
+- `api/v1/` – Versioned API routers such as `auth`, `users`, and trading-related endpoints.
+- `frontend/` – React/Vite web application source under `frontend/src`.
+- `frontend/src/` – Pages, components, hooks, and API clients for the trading UI.
+- `tasks/` – Celery task definitions for background and scheduled jobs.
+- `migrations/` – Alembic migration scripts for database schema changes.
+- `scripts/` – Helper scripts for local tooling, seeding, or maintenance (when present).
+
+As you explore, keep the split in mind: backend behavior and data live under `api/`, while user interactions and visual flows live under `frontend/`.
+
+## Key entrypoints
+
+Start with these files and directories when you need to understand or modify core behavior:
+
+- **Backend**
+  - `api/main.py` – FastAPI app initialization, middleware, and router includes.
+  - `api/v1/auth.py` (or similar) – Endpoints such as `POST /api/v1/auth/login` for authentication.
+  - `api/v1/*.py` – Domain-specific routers (trades, accounts, reports).
+- **Frontend**
+  - `frontend/src/main.tsx` – React app bootstrap and router.
+  - `frontend/src/routes` or `frontend/src/pages` – Route-level screens for each tab in the trading UI.
+  - `frontend/src/api` – Typed API clients, often mirroring backend routes.
+- **Celery / background work**
+  - `tasks/` – Celery app configuration and individual task modules for long-running or scheduled jobs.
+- **Migrations / database**
+  - `migrations/` – Alembic revision files defining schema changes over time.
+  - `api/db` or `api/models` – SQLAlchemy models and database session utilities.
+
+If you are unsure where to start for a change, begin with the relevant endpoint under `api/v1/`, then follow its usage into `frontend/src/api` and the consuming React components.
+
+## Run commands
+
+Run the backend and frontend locally to get a working trading environment.
+
+<CodeGroup tabs="Backend,Frontend" show-lines={true}>
+
+```bash
+# Backend: from the repository root
+python -m uvicorn api.main:app --port 8000 --reload
+```
+
+```bash
+# Frontend: from the repository root
+cd frontend
+npm run dev
+```
+
+</CodeGroup>
+
+When everything is running:
+
+- The **API** listens on `http://localhost:8000` (for example, `POST /api/v1/auth/login`).
+- The **frontend** is available on the dev server Vite prints in your terminal (typically `http://localhost:5173`).
+
+## Orienting yourself as a new contributor
+
+Start from a user flow or agent task, then trace it through the stack:
+
+1. Identify the **UI tab or feature** (for example, alerts, reports, or strategies).
+2. Open the corresponding **React route component** under `frontend/src` and look for hooks or API calls.
+3. Follow those calls to **API client utilities** under `frontend/src/api`.
+4. Map each client method to a **FastAPI router function** in `api/v1/`.
+5. Inspect any **database models or queries** used by that router in `api/models` or related modules.
+6. Check **Celery tasks** in `tasks/` if the feature involves background processing or scheduled jobs.
+
+This top-down flow mirrors how agents will experience the system: UI or tool call → HTTP endpoint → domain logic → persistence.
+
+## What to read next
+
+Use these pages to connect this project context with the rest of the documentation:
+
+<Columns cols={2}>
+  <Card title="Introduction" icon="home" href="/introduction">
+    Review the overall goals of the trading environment and how AI agents fit into the workflow.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Spin up the backend and frontend locally and verify that the core trading UI and APIs respond.
+  </Card>
+</Columns>

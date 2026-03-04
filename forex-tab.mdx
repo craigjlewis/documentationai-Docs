@@ -1,0 +1,426 @@
+---
+title: Forex tab guide
+description: Understand each Forex screen in the React UI, including routes, frontend files, backend API prefixes, and where data is simulated.
+---
+
+## Overview
+
+The Forex tab groups all foreign-exchange tools in the app: trading hub, positions, analysis, risk, correlation, news, alerts, forecasting, and education. This guide maps each screen to its route, frontend file, and backend API prefix so you can navigate the UI and codebase confidently.
+
+<Callout kind="info">
+
+The Forex navigation group is defined in `frontend/src/components/Sidebar.tsx` with id `forex` and uses React Router routes configured in `frontend/src/App.tsx`. Sidebar expand/collapse state persists in `localStorage` under the `sidebar-expanded-sections` key.
+
+</Callout>
+
+<Callout kind="alert">
+
+Forex tools in this app are for research, analysis, and strategy development. Treat all outputs as simulated or paper-trading signals, not as live execution or broker-connected trading.
+
+</Callout>
+
+## Navigation and routes
+
+The Forex section appears as a grouped item labeled `FOREX` in the left sidebar. Each item links to a React Router route, with lazy-loaded page components under `frontend/src/pages`.
+
+Forex sidebar items and routes:
+
+- **Forex Trading Hub**
+  - Route: `/forex-trading-hub`
+  - Frontend: `frontend/src/pages/ForexTradingHub.tsx`
+- **Forex Positions**
+  - Route: `/forex-positions`
+  - Frontend: `frontend/src/pages/ForexPositions.tsx`
+- **Forex Pair Analysis**
+  - Route: `/forex-pair-analysis`
+  - Frontend: `frontend/src/pages/ForexPairAnalysis.tsx`
+- **Forex Risk Management**
+  - Route: `/forex-risk-management`
+  - Frontend: `frontend/src/pages/ForexRiskManagement.tsx`
+- **Forex Strategy Builder**
+  - Route: `/forex-strategy-builder`
+  - Frontend: `frontend/src/pages/ForexStrategyBuilder.tsx`
+- **Forex Market Sessions**
+  - Route: `/forex-market-sessions`
+  - Frontend: `frontend/src/pages/ForexMarketSessions.tsx`
+- **Forex Correlation**
+  - Route: `/forex-correlation`
+  - Frontend: `frontend/src/pages/ForexCorrelation.tsx`
+- **Forex Session Analysis**
+  - Route: `/forex-session-analysis`
+  - Frontend: `frontend/src/pages/ForexSessionAnalysis.tsx`
+- **Forex News Feed**
+  - Route: `/forex-news-feed`
+  - Frontend: `frontend/src/pages/ForexNewsFeed.tsx`
+- **Forex Alerts**
+  - Route: `/forex-alerts`
+  - Frontend: `frontend/src/pages/ForexAlerts.tsx`
+- **Forex Forecasting**
+  - Route: `/forex-forecasting`
+  - Frontend: `frontend/src/pages/ForexForecasting.tsx`
+- **Forex Education**
+  - Route: `/forex-education`
+  - Frontend: `frontend/src/pages/ForexEducation.tsx`
+- **Market Timing Education**
+  - Route: `/market-timing-education`
+  - Frontend: `frontend/src/pages/MarketTimingEducation.tsx`
+- **Systematic Trading Education**
+  - Route: `/systematic-trading-education`
+  - Frontend: `frontend/src/pages/SystematicTradingEducation.tsx`
+- **Price Action Education**
+  - Route: `/price-action-education`
+  - Frontend: `frontend/src/pages/PriceActionEducation.tsx`
+- **Fundamental Analysis Education**
+  - Route: `/fundamental-analysis-education`
+  - Frontend: `frontend/src/pages/FundamentalAnalysisEducation.tsx`
+- **Advanced Technical Analysis**
+  - Route: `/advanced-technical-analysis`
+  - Frontend: `frontend/src/pages/AdvancedTechnicalAnalysis.tsx`
+- **Currency Pair Analysis**
+  - Route: `/currency-pair-analysis`
+  - Frontend: `frontend/src/pages/CurrencyPairAnalysis.tsx`
+
+Backend Forex-related routers are mounted in `api/main.py` under the `/api/v1` prefix:
+
+- `api/routes/forex.py` → `/api/v1/forex`
+- `api/routes/forex_positions.py` → `/api/v1/forex-positions`
+- `api/routes/forex_risk_management.py` → `/api/v1/forex-risk`
+- `api/routes/forex_forecasting.py` → `/api/v1/forex-forecasting`
+- `api/routes/forex_alerts.py` → `/api/v1/forex-alerts`
+- `api/routes/forex_news.py` → `/api/v1/forex-news`
+- `api/routes/currency_correlation.py` → `/api/v1/currency-correlation`
+
+Some UI screens still use mock or simulated data and may not invoke these APIs yet.
+
+## Quick access to key Forex tools
+
+Use these shortcuts to jump into the most commonly used Forex workflows.
+
+<Columns cols={3}>
+
+<Card title="Trading hub & positions" href="/quickstart" icon="terminal" cta="Open UI and inspect">
+
+- Navigate to `/forex-trading-hub` and `/forex-positions`.
+- Inspect components in `frontend/src/pages/ForexTradingHub.tsx` and `ForexPositions.tsx`.
+- Backend focus: `/api/v1/forex` and `/api/v1/forex-positions`.
+
+</Card>
+
+<Card title="Risk, correlation & alerts" href="/integrations" icon="settings" cta="Connect workflows">
+
+- Explore `/forex-risk-management`, `/forex-correlation`, `/forex-alerts`.
+- Link risk metrics and alert flows with external tooling via Integrations.
+- Backend focus: `/api/v1/forex-risk`, `/api/v1/currency-correlation`, `/api/v1/forex-alerts`.
+
+</Card>
+
+<Card title="Forecasting & research" href="/fx-reports-cloud" icon="bar-chart" cta="Scale analysis">
+
+- Use `/forex-forecasting` and analysis screens for model-driven insight.
+- Combine with FX Reports Cloud for batch analytics and archival.
+- Backend focus: `/api/v1/forex-forecasting`, `/api/v1/forex-news`.
+
+</Card>
+
+</Columns>
+
+## How to use the Forex tab
+
+<Steps>
+
+<Step title="Open the Forex Trading Hub" icon="monitor">
+
+- Click the `FOREX` group in the sidebar and select **Forex Trading Hub**.
+- Confirm the route is `/forex-trading-hub` and the page component is `ForexTradingHub.tsx`.
+- Use this screen to get a high-level view of pairs, sessions, and key metrics. Some tiles may use simulated snapshot data.
+
+</Step>
+
+<Step title="Review open Forex positions" icon="bar-chart">
+
+- From the same group, select **Forex Positions**.
+- Confirm the route is `/forex-positions` and the component is `ForexPositions.tsx`.
+- Check open and historical positions, and cross-reference with the `/api/v1/forex-positions` endpoints when building automation.
+
+</Step>
+
+<Step title="Run a forecasting scenario" icon="zap">
+
+- Navigate to **Forex Forecasting** at route `/forex-forecasting`.
+- Inspect how `ForexForecasting.tsx` uses `/api/v1/forex-forecasting` to load pairs, history, and predictive outputs.
+- Use the forecasting outputs alongside FX Reports Cloud or BrowserAct FX Reports when you need repeatable research.
+
+</Step>
+
+<Step title="Create or review an alert" icon="bell">
+
+- Open **Forex Alerts** at `/forex-alerts` (component `ForexAlerts.tsx`).
+- Configure or inspect alerts; the backend router lives under `/api/v1/forex-alerts`.
+- Validate alert behavior in development before wiring any external notification systems.
+
+</Step>
+
+</Steps>
+
+## Core screens
+
+### Forex Trading Hub
+
+The Forex Trading Hub aggregates key information for major pairs, sessions, and quick links into deeper tools.
+
+- **Route**
+  - `/forex-trading-hub`
+- **Frontend**
+  - `frontend/src/pages/ForexTradingHub.tsx`
+- **Backend APIs**
+  - Likely consumers from `/api/v1/forex`:
+    - `/api/v1/forex/pairs` for available currency pairs
+    - `/api/v1/forex/quote/{pair}` for live or near-real-time quotes
+    - `/api/v1/forex/history/{pair}` for recent historical candles or prices
+    - `/api/v1/forex/calendar` for upcoming macro events
+  - May also surface summary data from:
+    - `/api/v1/forex-news/dashboard` under `api/routes/forex_news.py`
+    - `/api/v1/currency-correlation/dashboard` under `api/routes/currency_correlation.py`
+- **Data characteristics**
+  - Some dashboard tiles and metrics can be wired to real backend APIs.
+  - Other widgets may use mock or simulated data during development, especially where latency or external feeds are not yet integrated.
+
+<Callout kind="alert">
+
+Treat Trading Hub metrics as indicative only. Verify exact numbers against backend responses from `/api/v1/forex` and related endpoints before using them in automated workflows.
+
+</Callout>
+
+### Forex Positions
+
+The Forex Positions screen manages and visualizes open and closed positions, including size, margin, and profit or loss calculations.
+
+- **Route**
+  - `/forex-positions`
+- **Frontend**
+  - `frontend/src/pages/ForexPositions.tsx`
+- **Backend APIs**
+  - `/api/v1/forex-positions` from `api/routes/forex_positions.py`:
+    - Position data
+      - `GET /api/v1/forex-positions/positions` to list positions
+      - `POST /api/v1/forex-positions/positions` to create or register a position
+      - `POST /api/v1/forex-positions/positions/{position_id}/close` to close a position
+    - Calculators
+      - `POST /api/v1/forex-positions/lot-size/calculate` for position sizing by risk
+      - `POST /api/v1/forex-positions/margin/calculate` for required margin
+      - `POST /api/v1/forex-positions/pnl/calculate` for profit and loss estimates
+- **Data characteristics**
+  - Core position list and calculators are intended to be API-backed.
+  - When the backend is not running, the UI may fall back to local or mock datasets for layout and interaction testing.
+
+### Forex Pair Analysis
+
+Forex Pair Analysis focuses on detailed inspection of individual currency pairs, including price history, volatility, and technical context.
+
+- **Route**
+  - `/forex-pair-analysis`
+- **Frontend**
+  - `frontend/src/pages/ForexPairAnalysis.tsx`
+- **Backend APIs**
+  - Primarily backed by `/api/v1/forex` from `api/routes/forex.py`:
+    - `GET /api/v1/forex/pairs` for the selection universe
+    - `GET /api/v1/forex/quote/{pair}` for current price
+    - `GET /api/v1/forex/history/{pair}` for OHLC or tick history
+  - May enrich views using:
+    - `GET /api/v1/forex-news/pair/{pair}/sentiment` from `api/routes/forex_news.py`
+    - `GET /api/v1/currency-correlation/pair` from `api/routes/currency_correlation.py`
+- **Data characteristics**
+  - Charts and statistics usually expect real API responses.
+  - In some builds, charts may load simulated series to support UI development without external feeds.
+
+### Forex Risk Management
+
+Forex Risk Management provides calculators and summaries for exposure, stop levels, margin, and drawdown.
+
+- **Route**
+  - `/forex-risk-management`
+- **Frontend**
+  - `frontend/src/pages/ForexRiskManagement.tsx`
+- **Backend APIs**
+  - `/api/v1/forex-risk` from `api/routes/forex_risk_management.py`:
+    - `POST /api/v1/forex-risk/position-size` for recommended lot sizes by account risk
+    - `POST /api/v1/forex-risk/stop-loss` for stop distance and price levels
+    - `POST /api/v1/forex-risk/margin-level` for margin utilization
+    - `GET /api/v1/forex-risk/drawdown/summary` for account or strategy drawdown
+    - `POST /api/v1/forex-risk/summary` for aggregate risk metrics
+  - `/api/v1/forex-positions` for feeding positions into risk models when needed.
+- **Data characteristics**
+  - Calculation endpoints are API-based and deterministic.
+  - Scenario UIs may seed sample accounts or positions with mock inputs.
+
+### Forex Correlation
+
+The Forex Correlation screen shows relationships between currencies, currency baskets, and commodities.
+
+- **Route**
+  - `/forex-correlation`
+- **Frontend**
+  - `frontend/src/pages/ForexCorrelation.tsx`
+- **Backend APIs**
+  - `/api/v1/currency-correlation` from `api/routes/currency_correlation.py`:
+    - `GET /api/v1/currency-correlation/pair` for pairwise correlation series
+    - `GET /api/v1/currency-correlation/matrix` for correlation matrices across many pairs
+    - `GET /api/v1/currency-correlation/commodity` for FX–commodity relationships
+    - `GET /api/v1/currency-correlation/risk-sentiment` for macro risk sentiment proxies
+    - `GET /api/v1/currency-correlation/dashboard` for summary widgets
+- **Data characteristics**
+  - Correlation matrices and sentiment scores depend on historical data; during development, the backend may serve precomputed or simulated stats.
+  - The UI may offer static sample heatmaps when data is unavailable.
+
+### Forex News Feed
+
+Forex News Feed centralizes macroeconomic news, FX-specific events, and sentiment derived from news sources.
+
+- **Route**
+  - `/forex-news-feed`
+- **Frontend**
+  - `frontend/src/pages/ForexNewsFeed.tsx`
+- **Backend APIs**
+  - `/api/v1/forex-news` from `api/routes/forex_news.py`:
+    - `GET /api/v1/forex-news/feed` for news items
+    - `GET /api/v1/forex-news/pair/{pair}/sentiment` for pair-focused sentiment
+    - `GET /api/v1/forex-news/dashboard` for high-level summaries
+    - `GET /api/v1/forex-news/sources` for configured news sources
+    - `GET /api/v1/forex-news/pairs` for tracked pairs
+- **Data characteristics**
+  - In production-style setups, news originates from live or batched external feeds.
+  - For local development, the app may rely on mock articles and sentiment to avoid external dependencies.
+
+### Forex Alerts
+
+The Forex Alerts screen manages alerts on prices, sessions, risk thresholds, or news triggers.
+
+- **Route**
+  - `/forex-alerts`
+- **Frontend**
+  - `frontend/src/pages/ForexAlerts.tsx`
+- **Backend APIs**
+  - `/api/v1/forex-alerts` from `api/routes/forex_alerts.py`:
+    - `GET /api/v1/forex-alerts/` to list existing alerts
+    - `POST /api/v1/forex-alerts/` to create alerts
+    - `GET /api/v1/forex-alerts/summary` for aggregated alert status
+    - `GET /api/v1/forex-alerts/sessions` for session-specific alert contexts
+    - `PUT /api/v1/forex-alerts/{alert_id}` to update alert definitions
+    - `PATCH /api/v1/forex-alerts/{alert_id}/toggle` to enable or disable alerts
+- **Data characteristics**
+  - Alert definitions and state live in the backend or a backing store configured there.
+  - Notification delivery systems (email, chat, webhooks) are typically external; this screen manages definitions, not the out-of-band delivery itself.
+
+<Callout kind="alert">
+
+Before relying on alerts for critical risk management, verify both the UI definitions and backend `/api/v1/forex-alerts` behavior in a staging or test environment, and confirm how notifications are actually delivered.
+
+</Callout>
+
+### Forex Forecasting
+
+Forex Forecasting exposes predictive models for currency pairs, scenario comparisons, and forward-looking indicators.
+
+- **Route**
+  - `/forex-forecasting`
+- **Frontend**
+  - `frontend/src/pages/ForexForecasting.tsx`
+- **Backend APIs**
+  - `/api/v1/forex-forecasting` from `api/routes/forex_forecasting.py`:
+    - `GET /api/v1/forex-forecasting/pairs` for supported pairs
+    - `GET /api/v1/forex-forecasting/history/{pair}` for training or evaluation history
+    - `GET /api/v1/forex-forecasting/analysis/{pair}` for model diagnostics and factors
+    - `POST /api/v1/forex-forecasting/predict` for forecast outputs
+    - `POST /api/v1/forex-forecasting/compare` for scenario or model comparisons
+- **Data characteristics**
+  - Forecast endpoints may run heavier computations or call separate modeling services.
+  - In development, responses can be static or sampled from canned forecasts to keep iteration fast.
+
+### Additional core tools
+
+These additional Forex screens sit within the Forex group but are more specialized; they may mix API-backed data and simulated data.
+
+- **Forex Strategy Builder**
+  - Route: `/forex-strategy-builder`
+  - Frontend: `frontend/src/pages/ForexStrategyBuilder.tsx`
+  - Likely uses combinations of `/api/v1/forex`, `/api/v1/forex-risk`, and `/api/v1/forex-positions` for backtesting inputs and constraints.
+  - Strategy templates and backtests often start with simulated or historical-only data rather than live trading flows.
+- **Forex Market Sessions**
+  - Route: `/forex-market-sessions`
+  - Frontend: `frontend/src/pages/ForexMarketSessions.tsx`
+  - May derive session status from `/api/v1/forex/calendar` and quote activity from `/api/v1/forex/history/{pair}`.
+  - Session heatmaps and timelines can be static or mock in early versions.
+- **Forex Session Analysis**
+  - Route: `/forex-session-analysis`
+  - Frontend: `frontend/src/pages/ForexSessionAnalysis.tsx`
+  - Expected to reuse historical and risk endpoints to evaluate behavior by session (London, New York, Asia).
+  - During development, per-session stats may come from precomputed demo datasets.
+
+## Education screens
+
+Education pages provide reference material and conceptual explanations. They usually render static or markdown-like content, sometimes enhanced with examples or charts, and generally do not depend on live backend APIs.
+
+- **Forex Education**
+  - Route: `/forex-education`
+  - Frontend: `frontend/src/pages/ForexEducation.tsx`
+  - High-level overview of Forex concepts and how they relate to tools in the app.
+- **Market Timing Education**
+  - Route: `/market-timing-education`
+  - Frontend: `frontend/src/pages/MarketTimingEducation.tsx`
+  - Focus on intraday timing, sessions, and volatility patterns.
+- **Systematic Trading Education**
+  - Route: `/systematic-trading-education`
+  - Frontend: `frontend/src/pages/SystematicTradingEducation.tsx`
+  - Covers rules-based strategies, backtesting, and risk frameworks.
+- **Price Action Education**
+  - Route: `/price-action-education`
+  - Frontend: `frontend/src/pages/PriceActionEducation.tsx`
+  - Details on candles, structure, and pattern-based interpretation.
+- **Fundamental Analysis Education**
+  - Route: `/fundamental-analysis-education`
+  - Frontend: `frontend/src/pages/FundamentalAnalysisEducation.tsx`
+  - Explains macro drivers, economic releases, and their FX impact.
+- **Advanced Technical Analysis**
+  - Route: `/advanced-technical-analysis`
+  - Frontend: `frontend/src/pages/AdvancedTechnicalAnalysis.tsx`
+  - Deep dive into indicators, oscillators, and advanced chart setups.
+- **Currency Pair Analysis**
+  - Route: `/currency-pair-analysis`
+  - Frontend: `frontend/src/pages/CurrencyPairAnalysis.tsx`
+  - Education-focused breakdown of how to think about individual pairs; complementary to the interactive **Forex Pair Analysis** tool.
+
+## Related docs
+
+Connect the Forex tab with the rest of your stack and research workflow.
+
+<Columns cols={3}>
+
+<Card title="Integrations" href="/integrations" icon="plug" cta="Connect external systems">
+
+Explore how to connect the app to brokers, data providers, or notification channels that complement Forex alerts and analytics.
+
+</Card>
+
+<Card title="FX Reports Cloud" href="/fx-reports-cloud" icon="cloud" cta="Scale FX research">
+
+Use FX Reports Cloud to batch, schedule, and persist forecasting and risk analyses that originate from Forex tab tools.
+
+</Card>
+
+<Card title="BrowserAct FX Reports" href="/browseract-reports" icon="monitor" cta="Collect browser-based reports">
+
+Combine Forex analytics with BrowserAct FX Reports to capture, share, and review analysis sessions across your team.
+
+</Card>
+
+</Columns>
+
+<Columns cols={1}>
+
+<Card title="Claude Bridge" href="/claude-bridge" icon="bot" cta="Automate analysis">
+
+Leverage Claude Bridge to automate commentary, report generation, or trading playbooks based on outputs from Forex Forecasting, Risk Management, and Correlation.
+
+</Card>
+
+</Columns>

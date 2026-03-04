@@ -1,0 +1,525 @@
+---
+title: Claude Bridge
+description: Understand the Claude Bridge service, its architecture, endpoints, configuration, and how to set it up for local development.
+---
+
+## Overview
+
+Claude Bridge is a Node.js Express service in `claude-bridge/` that proxies requests from the app to Claude via the Claude CLI and to BrowserAct MCP tools. It lets the frontend and backend talk to Claude without managing API keys directly.
+
+Claude Bridge authenticates through the Claude CLI (`claude login`), typically using a Claude Max subscription. Once logged in, the bridge can run prompts and tools on your behalf with no extra credentials in the repo.
+
+<Callout kind="info">
+
+Claude Bridge uses the locally authenticated Claude CLI instead of an API key. Make sure you complete `claude login` with an account that has Claude Max or equivalent access.
+
+</Callout>
+
+## Architecture and request flows
+
+The bridge sits between three main layers:
+
+- Frontend (browser)
+- Backend (FastAPI / Python)
+- External services (Claude CLI and BrowserAct MCP)
+
+### High-level data flow
+
+```mermaid
+graph LR
+  A[Frontend] --> B[Claude Bridge]
+  C[Backend (FastAPI)] --> B
+  B --> D[Claude CLI]
+  B --> E[BrowserAct MCP tools]
+```
+
+The sections below break down each direction.
+
+### Frontend → Claude Bridge
+
+The frontend uses `VITE_CLAUDE_BRIDGE_URL` (defaulting to `http://localhost:3009`) to call bridge endpoints defined in `frontend/src/services/browserActApi.ts`.
+
+Typical flows include:
+
+- Checking BrowserAct tool status
+- Listing available tools
+- Calling a specific tool
+- Running scrape/analyze workflows
+
+Common endpoints:
+
+- `GET /api/browseract/status`
+- `GET /api/browseract/tools`
+- `POST /api/browseract/tools/call`
+- `POST /api/browseract/scrape-all`
+- `POST /api/browseract/analyze`
+
+These calls are made directly from the browser to the bridge URL, so the bridge must be reachable from the user's machine on the configured port.
+
+### Backend (FastAPI) → Claude Bridge
+
+The backend service in `api/services/browseract_claude_service.py` calls the bridge to:
+
+- Verify availability: `GET /api/status`
+- Run chats: `POST /api/chat`
+
+<Callout kind="info">
+
+Backend services use the `CLAUDE_BRIDGE_URL` environment variable, which defaults to `http://localhost:3009` when not set. This should usually point to the same host and port as `VITE_CLAUDE_BRIDGE_URL`.
+
+</Callout>
+
+Backend flow:
+
+1. On startup or before a request, the backend may call `/api/status` to confirm the bridge is healthy and authenticated.
+2. For chat-style operations, the backend sends messages to `/api/chat`, and the bridge forwards them to Claude via the CLI.
+
+### Claude Bridge → Claude CLI and BrowserAct MCP tools
+
+Inside `claude-bridge/src/index.js`, the Express app exposes endpoints that:
+
+- Invoke the local Claude CLI for chat and analysis
+- Proxy MCP tool calls to BrowserAct at `https://mcp.browseract.com/.../mcp/`
+
+Key external interactions:
+
+- **Claude CLI**
+  - Used for `/api/chat`, `/api/chat/stream`, `/api/analyze`, `/api/models`, and status checks.
+  - Depends on your local Claude CLI installation and stored auth from `claude login`.
+
+- **BrowserAct MCP**
+  - Used for `/api/browseract/status`, `/api/browseract/tools`, `/api/browseract/tools/call`, `/api/browseract/scrape-all`, and `/api/browseract/analyze`.
+  - Bridge forwards HTTP calls from the app to BrowserAct MCP endpoints, handling payloads and responses.
+
+## Setup for local development
+
+Use this section to get a working Claude Bridge running on your machine and validate that frontend and backend can reach it.
+
+<Callout kind="info">
+
+Run Claude Bridge alongside your backend and frontend services. For typical local development, you will have at least three processes: the bridge, the FastAPI backend, and the frontend dev server.
+
+</Callout>
+
+### Prerequisites
+
+Before you start, confirm:
+
+- Node.js and npm are installed.
+- Python backend and frontend environments are already set up.
+- You can modify environment variables for both frontend and backend.
+
+You also need the Claude CLI and an authenticated session.
+
+<Steps>
+
+<Step title="Install the Claude CLI" icon="terminal">
+
+Install the Claude CLI globally. Follow Anthropic's official installation instructions for your platform, then verify the command is available.
+
+<CodeGroup tabs="bash">
+
+```bash
+# Confirm the CLI is installed
+claude --version
+```
+
+</CodeGroup>
+
+If the command succeeds and prints a version string, the CLI is ready.
+
+</Step>
+
+<Step title="Authenticate with Claude" icon="lock">
+
+Log in to Claude using the CLI and your Claude Max (or compatible) account.
+
+<CodeGroup tabs="bash">
+
+```bash
+# Start browser-based login
+claude login
+```
+
+</CodeGroup>
+
+Complete the login flow in your browser. When it finishes, the CLI stores your credentials locally, and the bridge will reuse this authenticated session.
+
+</Step>
+
+<Step title="Install Claude Bridge dependencies" icon="package">
+
+From the repository root, move into the bridge directory and install Node.js dependencies defined in `claude-bridge/package.json`.
+
+<CodeGroup tabs="bash">
+
+```bash
+cd claude-bridge
+npm install
+```
+
+</CodeGroup>
+
+This step sets up all libraries required by the Express server and MCP proxy logic.
+
+</Step>
+
+<Step title="Start the Claude Bridge service" icon="play-circle">
+
+Start the Express server on its default port (typically 3009) from within the `claude-bridge/` directory.
+
+<CodeGroup tabs="bash">
+
+```bash
+cd claude-bridge
+npm run dev
+# or, depending on the project setup:
+# npm start
+```
+
+</CodeGroup>
+
+Success indicators:
+
+- Your terminal logs that the server is listening, for example: `Claude Bridge listening on port 3009`.
+- `GET http://localhost:3009/health` returns a JSON health payload.
+
+</Step>
+
+<Step title="Verify health and status endpoints" icon="check-circle">
+
+Use a tool like `curl` or your browser to confirm the bridge is live and authenticated.
+
+<CodeGroup tabs="bash,curl">
+
+```bash
+# Health check
+curl http://localhost:3009/health
+```
+
+```bash
+# Status check (forces CLI and model status refresh)
+curl "http://localhost:3009/api/status?force=true"
+```
+
+</CodeGroup>
+
+You should see JSON responses with status information instead of connection errors. If `/api/status` indicates that Claude is not logged in, run `claude login` again and restart the bridge.
+
+</Step>
+
+</Steps>
+
+## Key endpoints
+
+This section summarizes the main Claude Bridge endpoints with their purpose and typical usage. Exact payload shapes are defined in `claude-bridge/src/index.js`.
+
+### Health and service status
+
+- **`GET /health`**
+  - Returns a basic health check for the Express app.
+  - Used by operators or monitoring to ensure the bridge process is up.
+  - Example behavior: returns `{ "ok": true }` or similar JSON.
+
+- **`GET /api/status`**
+  - Returns detailed status about Claude CLI availability, models, and possibly MCP readiness.
+  - Supports the query parameter `?force=true` to bypass cached data and refresh status.
+  - Used by the backend before attempting chat or analysis calls.
+
+<Request tabs="bash,python">
+
+```bash
+curl "http://localhost:3009/api/status?force=true"
+```
+
+```python
+import requests
+
+resp = requests.get("http://localhost:3009/api/status", params={"force": "true"})
+print(resp.json())
+```
+
+</Request>
+
+### Model listing
+
+- **`GET /api/models`**
+  - Lists Claude models available via the CLI.
+  - Useful for debugging which models your authenticated account can access.
+  - Typical response: an array of model identifiers and metadata.
+
+<Request tabs="bash">
+
+```bash
+curl http://localhost:3009/api/models
+```
+
+</Request>
+
+### Chat and streaming
+
+- **`POST /api/chat`**
+  - Runs a synchronous chat completion through Claude CLI.
+  - Backend calls this endpoint (see `api/services/browseract_claude_service.py`), sending conversation messages and configuration.
+  - Response contains the assistant's reply and any metadata needed by the backend.
+
+- **`POST /api/chat/stream`**
+  - Similar to `/api/chat`, but streams responses via Server-Sent Events (SSE).
+  - More suitable for frontend UIs that display partial tokens in real time.
+  - Client must handle `text/event-stream` and incremental chunks.
+
+<Request tabs="bash">
+
+```bash
+curl -X POST http://localhost:3009/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "user", "content": "Summarize the latest market activity."}
+    ]
+  }'
+```
+
+</Request>
+
+<Callout kind="tip">
+
+Prefer `/api/chat` from the backend for simpler integration. Use `/api/chat/stream` primarily from the frontend if you need token streaming and can handle SSE connections.
+
+</Callout>
+
+### Analysis
+
+- **`POST /api/analyze`**
+  - Runs higher-level analysis workflows via Claude, often combining prompt templates and structured outputs.
+  - Intended for jobs where the backend or frontend wants a richer analysis than a simple chat response.
+
+<Request tabs="bash">
+
+```bash
+curl -X POST http://localhost:3009/api/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Analyze FX market volatility for the last 24 hours."
+  }'
+```
+
+</Request>
+
+### BrowserAct MCP proxy endpoints
+
+Claude Bridge also exposes endpoints that call BrowserAct MCP at `https://mcp.browseract.com/.../mcp/`.
+
+- **`GET /api/browseract/status`**
+  - Checks BrowserAct MCP service availability.
+  - Used by the frontend to decide whether FX workflows can run.
+
+- **`GET /api/browseract/tools`**
+  - Lists available MCP tools for BrowserAct.
+  - The frontend may use this to render tool selectors or capabilities.
+
+- **`POST /api/browseract/tools/call`**
+  - Calls a specific MCP tool with given arguments.
+  - The bridge forwards the request body to BrowserAct MCP and returns the tool result.
+
+- **`POST /api/browseract/scrape-all`**
+  - Triggers scraping of multiple sources through BrowserAct tools.
+  - Often used for FX reporting or dashboard updates.
+
+- **`POST /api/browseract/analyze`**
+  - Runs analysis across scraped data via BrowserAct MCP and Claude.
+  - Returns an aggregated analysis payload to the frontend.
+
+<Request tabs="bash">
+
+```bash
+curl -X GET http://localhost:3009/api/browseract/tools
+```
+
+</Request>
+
+## Configuration and environment variables
+
+Two main environment variables control how the frontend and backend find the bridge.
+
+### Frontend: VITE_CLAUDE_BRIDGE_URL
+
+`VITE_CLAUDE_BRIDGE_URL` is used inside `frontend/src/services/browserActApi.ts` to compute the base URL for all browser-to-bridge calls.
+
+<ParamField body="VITE_CLAUDE_BRIDGE_URL" param-type="string" required="false" show-location="false">
+
+Base URL for Claude Bridge in the browser environment. Defaults to `http://localhost:3009` if not set, which is ideal for local development when the bridge runs on your machine. Set this to a different host or port when deploying the frontend to another environment.
+
+</ParamField>
+
+Example `.env` entry for the frontend:
+
+<CodeGroup tabs="bash">
+
+```bash
+# frontend/.env.local
+VITE_CLAUDE_BRIDGE_URL=http://localhost:3009
+```
+
+</CodeGroup>
+
+### Backend: CLAUDE_BRIDGE_URL
+
+`CLAUDE_BRIDGE_URL` is used in `api/services/browseract_claude_service.py` to build URLs for `/api/status` and `/api/chat`.
+
+<ParamField body="CLAUDE_BRIDGE_URL" param-type="string" required="false" show-location="false">
+
+Base URL for Claude Bridge used by the FastAPI backend. Defaults to `http://localhost:3009` when unset. Set this to the reachable bridge host from the backend container or environment (for example, `http://claude-bridge:3009` in Docker).
+
+</ParamField>
+
+Example environment variable for the backend:
+
+<CodeGroup tabs="bash">
+
+```bash
+# backend environment
+CLAUDE_BRIDGE_URL=http://localhost:3009
+```
+
+</CodeGroup>
+
+<Callout kind="tip">
+
+Keep `VITE_CLAUDE_BRIDGE_URL` and `CLAUDE_BRIDGE_URL` aligned across environments so that both frontend and backend talk to the same bridge instance.
+
+</Callout>
+
+## Verifying integration from backend and frontend
+
+After the bridge is running and environment variables are set, validate both integration paths.
+
+### Backend integration check
+
+From your backend environment:
+
+<CodeGroup tabs="python,bash">
+
+```python
+# Minimal check using Python requests in a REPL
+import os
+import requests
+
+base_url = os.getenv("CLAUDE_BRIDGE_URL", "http://localhost:3009")
+status = requests.get(f"{base_url}/api/status", params={"force": "true"})
+print(status.status_code, status.json())
+```
+
+```bash
+# Direct curl against the URL backend will use
+curl "$CLAUDE_BRIDGE_URL/api/status?force=true"
+```
+
+</CodeGroup>
+
+Success signals:
+
+- HTTP 200 response
+- JSON body indicating `ok: true` or similar, plus model/CLI status information
+
+### Frontend integration check
+
+From your browser developer tools, watch network requests while you load a page that uses BrowserAct or Claude. You should see calls to:
+
+- `GET {VITE_CLAUDE_BRIDGE_URL}/api/browseract/status`
+- `GET {VITE_CLAUDE_BRIDGE_URL}/api/browseract/tools`
+- `POST {VITE_CLAUDE_BRIDGE_URL}/api/browseract/tools/call` (when you trigger tool usage)
+
+Check that the responses are HTTP 200 and payloads look valid for your UI.
+
+## Troubleshooting
+
+This section focuses on the most common issues when working with Claude Bridge.
+
+<ExpandableGroup>
+
+<Expandable title="Error: Not logged in to Claude" default-open="true">
+
+If `/api/status` indicates that Claude is not authenticated or model listing fails, the bridge likely cannot use your CLI session.
+
+Steps to fix:
+
+- Run `claude login` again in your shell.
+- Confirm `claude models list` (or similar CLI commands) work from the same user account.
+- Restart the Claude Bridge process so it picks up the valid session.
+
+<Callout kind="alert">
+
+If you run the bridge as a different OS user than the one who executed `claude login`, the CLI credentials might not be visible. Run `claude login` under the same user account that runs the Node.js process.
+
+</Callout>
+
+</Expandable>
+
+<Expandable title="Bridge not reachable from backend or frontend">
+
+If calls to `/health` or `/api/status` fail with connection errors:
+
+- Ensure the bridge process is running and listening on the expected port (default 3009).
+- Confirm `VITE_CLAUDE_BRIDGE_URL` and `CLAUDE_BRIDGE_URL` point to a reachable host and port.
+- In containerized setups, use the internal service name (for example, `http://claude-bridge:3009`) instead of `localhost`.
+
+Quick connectivity check:
+
+<CodeGroup tabs="bash">
+
+```bash
+curl http://localhost:3009/health
+```
+
+</CodeGroup>
+
+</Expandable>
+
+<Expandable title="Concurrency and rate limits">
+
+Claude Bridge uses the Claude CLI under the hood, subject to your Claude account's concurrency and rate limits. If you see timeouts or throttling symptoms:
+
+- Reduce the number of simultaneous `/api/chat` or `/api/analyze` requests.
+- Avoid long-lived `POST /api/chat/stream` connections when not needed.
+- Add retry logic with backoff on the backend when the bridge returns errors related to limits.
+
+<Callout kind="info">
+
+Because the bridge shares a single CLI session, heavy local testing can hit soft limits faster than expected. Start with a small number of concurrent requests and scale up gradually.
+
+</Callout>
+
+</Expandable>
+
+</ExpandableGroup>
+
+## Next steps
+
+With Claude Bridge configured and verified, you can:
+
+<Columns cols={2}>
+
+<Card
+  title="Explore features"
+  href="/features"
+  icon="zap"
+  cta="See what you can build"
+>
+
+Review core features that rely on Claude Bridge and BrowserAct, including FX analysis workflows.
+
+</Card>
+
+<Card
+  title="FX reports with BrowserAct"
+  href="/browseract-reports"
+  icon="bar-chart"
+  cta="Dive into FX reporting"
+>
+
+Learn how BrowserAct FX reports use Claude Bridge and MCP tools to generate detailed market insights.
+
+</Card>
+
+</Columns>

@@ -1,0 +1,274 @@
+---
+title: Set up Supabase for FX report storage
+description: Create a Supabase project with pgvector, FX report tables, semantic search RPCs, RLS policies, and storage for BrowserAct FX reports.
+---
+
+## Overview
+
+Configure Supabase as the backing store for BrowserAct FX reports, including pgvector-based embeddings, report tables, semantic search functions, and secure access controls.
+
+You will create a dedicated project, enable the `vector` extension, define a small schema for FX reports and embeddings, add an RPC for semantic search, lock it down with Row Level Security, and expose it through a storage bucket.
+
+## Prerequisites
+
+- A Supabase account
+- Project owner or admin access in Supabase
+- Basic familiarity with SQL and the Supabase dashboard
+
+<Callout kind="info">
+Run all SQL snippets in the Supabase SQL editor for the project you created. Adjust schema or names only if you know the downstream impact.
+</Callout>
+
+## Step-by-step Supabase setup
+
+<Steps>
+
+  <Step title="Create a new Supabase project" icon="rocket">
+
+  Create an isolated Supabase project for FX reports so you can manage database schema, storage, and keys independently.
+
+  1. Sign in to the Supabase dashboard.
+  2. Click **New project**.
+  3. Enter a **Name** like `browseract-fx-reports`.
+  4. Choose a **Strong database password** and record it in your secrets manager.
+  5. Select a **Region** close to your application servers.
+  6. Click **Create new project** and wait for provisioning to complete.
+
+  Success: You see a project dashboard with tabs for **Database**, **Authentication**, and **Storage**.
+
+  </Step>
+
+  <Step title="Enable the pgvector extension" icon="database">
+
+  Enable the `vector` extension so you can store and query embeddings for semantic search over FX reports.
+
+  Open the **SQL editor** and run:
+
+  <CodeGroup tabs="Postgres SQL">
+
+  ```sql
+  -- Enable pgvector once per database
+  create extension if not exists vector;
+  ```
+
+  </CodeGroup>
+
+  Success: The query runs without error and `vector` appears under **Database → Extensions**.
+
+  </Step>
+
+  <Step title="Create FX report tables" icon="file-text">
+
+  Create relational tables to store FX content, metadata, and embeddings. The full schema includes:
+
+  - `daily_reports` — top-level daily FX reports
+  - `currency_pair_analysis` — per-pair analysis slices
+  - `economic_indicators` — macro data referenced in reports
+  - `trade_log` — executed or hypothetical trades tied to reports
+  - `report_embeddings` — chunk-level text plus embedding vectors
+
+  The exact SQL is long; here is a representative example for the `report_embeddings` table showing how text and embeddings are stored:
+
+  <CodeGroup tabs="Postgres SQL">
+
+  ```sql
+  create table if not exists report_embeddings (
+    id uuid primary key default gen_random_uuid(),
+    report_id uuid not null references daily_reports(id) on delete cascade,
+    chunk_index integer not null,
+    content text not null,
+    embedding vector(1536) not null,
+    created_at timestamptz not null default now()
+  );
+
+  create index if not exists idx_report_embeddings_report_id
+    on report_embeddings (report_id);
+
+  create index if not exists idx_report_embeddings_embedding
+    on report_embeddings using ivfflat (embedding vector_cosine_ops)
+    with (lists = 100);
+  ```
+
+  </CodeGroup>
+
+  Success: You see `report_embeddings` and the other tables under **Database → Tables**.
+
+  </Step>
+
+  <Step title="Add semantic search and helper RPC functions" icon="search">
+
+  Define Postgres functions to support semantic search and related operations from your application. The key piece is a semantic search RPC that accepts an embedding and returns the most relevant report chunks.
+
+  In the SQL editor, create a function with a signature like:
+
+  <CodeGroup tabs="Postgres SQL">
+
+  ```sql
+  create or replace function search_reports (
+    query_embedding vector(1536),
+    match_count integer default 10,
+    similarity_threshold double precision default 0.75
+  )
+  returns table (
+    report_id uuid,
+    chunk_index integer,
+    content text,
+    similarity double precision
+  )
+  language plpgsql
+  security definer
+  as $$
+  begin
+    -- Function body performs vector similarity search over report_embeddings
+    -- using cosine distance or a similar metric and returns ranked chunks.
+    return query
+    select
+      re.report_id,
+      re.chunk_index,
+      re.content,
+      1 - (re.embedding <=> query_embedding) as similarity
+    from report_embeddings re
+    where 1 - (re.embedding <=> query_embedding) >= similarity_threshold
+    order by re.embedding <=> query_embedding
+    limit match_count;
+  end;
+  $$;
+  ```
+
+  </CodeGroup>
+
+  You can add additional RPCs (for example, to fetch reports, aggregate trade logs, or surface economic indicators) following the same pattern.
+
+  Success: The function appears under **Database → Functions**, and you can `select * from search_reports(...)` in the SQL editor to test it.
+
+  </Step>
+
+  <Step title="Enable Row Level Security and policies" icon="shield">
+
+  Turn on Row Level Security (RLS) so only authorized clients can read or write FX report data. Apply RLS to each application-facing table, then add explicit policies that match your access model.
+
+  In the SQL editor, enable RLS on the core tables:
+
+  <CodeGroup tabs="Postgres SQL">
+
+  ```sql
+  alter table daily_reports enable row level security;
+  alter table currency_pair_analysis enable row level security;
+  alter table economic_indicators enable row level security;
+  alter table trade_log enable row level security;
+  alter table report_embeddings enable row level security;
+  ```
+
+  </CodeGroup>
+
+  Then define policies such as:
+
+  - Read-only access for authenticated users to `daily_reports` and `report_embeddings`
+  - Insert/update restrictions for internal services only, identified via service role or custom claims
+
+  Example read policy for embeddings:
+
+  <CodeGroup tabs="Postgres SQL">
+
+  ```sql
+  create policy "Allow read embeddings for authenticated users"
+  on report_embeddings
+  for select
+  using (auth.role() = 'authenticated');
+  ```
+
+  </CodeGroup>
+
+  Success: Under each table's **RLS** section, you see `Enabled` and at least one policy.
+
+  </Step>
+
+  <Step title="Create the fx-reports storage bucket" icon="folder">
+
+  Create a storage bucket for raw FX report files (PDFs, HTML snapshots, or other sources) that feed into your parsing and embedding pipeline.
+
+  1. Go to **Storage → Buckets**.
+  2. Click **New bucket**.
+  3. Set **Name** to `fx-reports`.
+  4. Choose whether the bucket is **Public** or **Private**:
+     - Public: reports are world-readable over signed URLs.
+     - Private: only authorized clients with signed URLs or service role access can read.
+  5. Click **Create bucket**.
+
+  Add storage policies that match your app model, for example: authenticated users can read from `fx-reports`, only service role can write.
+
+  Success: The `fx-reports` bucket appears in the bucket list and you can upload a test file.
+
+  </Step>
+
+  <Step title="Run verification queries" icon="check-circle">
+
+  Sanity-check the schema and functions with a few simple queries in the SQL editor.
+
+  <CodeGroup tabs="Postgres SQL">
+
+  ```sql
+  -- Confirm pgvector is available
+  select extname, extversion
+  from pg_extension
+  where extname = 'vector';
+
+  -- Confirm tables exist
+  select table_name
+  from information_schema.tables
+  where table_schema = 'public'
+    and table_name in (
+      'daily_reports',
+      'currency_pair_analysis',
+      'economic_indicators',
+      'trade_log',
+      'report_embeddings'
+    )
+  order by table_name;
+
+  -- Smoke test the search function (replace with a real embedding)
+  select *
+  from search_reports(
+    query_embedding := '[0, 0, 0, ...]'::vector(1536),
+    match_count := 5
+  )
+  limit 5;
+  ```
+
+  </CodeGroup>
+
+  Success: The extension row is present, all tables are listed, and the search function query runs (even if it returns zero rows in an empty database).
+
+  </Step>
+
+</Steps>
+
+## Environment variables
+
+Store your Supabase credentials as environment variables so your backend and tools can connect safely.
+
+<ParamField body="SUPABASE_URL" param-type="string" required="true" show-location="false">
+Base URL of your Supabase project, found under **Project settings → API → Project URL**. Use this in all Supabase client and server connections.
+</ParamField>
+
+<ParamField body="SUPABASE_ANON_KEY" param-type="string" required="true" show-location="false">
+Public anon key for client-side access with Row Level Security enforced. Use this in browser clients or desktop apps that authenticate users.
+</ParamField>
+
+<ParamField body="SUPABASE_SERVICE_ROLE_KEY" param-type="string" required="true" show-location="false">
+Service role key used by the backend for privileged operations like server-side inserts, storage actions, or background jobs. Keep this secret and only use it on the server.
+</ParamField>
+
+<Callout kind="alert">
+Never expose `SUPABASE_SERVICE_ROLE_KEY` in frontend code, logs, or client-side configuration. Treat it as a secret with broad database privileges and rotate it if you suspect exposure.
+</Callout>
+
+Add these variables to your deployment environment (for example, `docker-compose`, cloud provider secrets, or your local `.env` file) and reference them in your backend code when initializing Supabase clients.
+
+## Next steps
+
+Once Supabase is configured, connect it to your BrowserAct FX reporting workflows:
+
+- Use the service role key in your ingestion pipeline to write reports, chunks, and embeddings into the tables.
+- Call the `search_reports` function from your backend to power semantic search in BrowserAct.
+- Integrate the `fx-reports` bucket into your scraping or upload process to keep raw sources aligned with stored embeddings.

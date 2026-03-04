@@ -1,0 +1,266 @@
+---
+title: Analysis tab guide
+description: Understand the Analysis tab navigation, routes, React pages, and data flow so you can extend or debug the trading-app-web analysis experience.
+---
+
+## Overview
+
+The Analysis tab groups together technical, fundamental, macro, and correlation tools that help users understand markets beyond raw price charts.
+
+From a developer perspective, the Analysis tab is a collection of routed React pages wired to a shared sidebar group and a set of backend services accessed through generic API clients rather than explicit `/api/v1` endpoints.
+
+<Callout kind="info">
+
+The Analysis tab is primarily a frontend routing and data-display layer. Each screen maps to a dedicated page component under `frontend/src/pages` and typically calls shared service modules under `frontend/src/services`.
+
+</Callout>
+
+## Navigation and routes
+
+The Analysis tab appears as the `ANALYSIS` group in the left-hand sidebar.
+
+- **Sidebar group definition:** `frontend/src/components/Sidebar.tsx`, group id `analysis`, title `ANALYSIS`.
+- **State persistence:** the expand/collapse state of the Analysis group (and other sidebar groups) uses the `localStorage` key `sidebar-expanded-sections`. When a user expands or collapses the group, the app updates this key so the layout persists across reloads.
+
+Each Analysis item links to a route configured in `frontend/src/App.tsx`:
+
+- `/technical-analysis-hub` → `frontend/src/pages/TechnicalAnalysisHub.tsx`
+- `/technical-snapshots` → `frontend/src/pages/TechnicalSnapshots.tsx`
+- `/fundamental-analysis` → `frontend/src/pages/FundamentalAnalysis.tsx`
+- `/economic-calendar` → `frontend/src/pages/EconomicCalendar.tsx`
+- `/macro-analysis` → `frontend/src/pages/MacroAnalysis.tsx`
+- `/sector-analysis` → `frontend/src/pages/SectorAnalysis.tsx`
+- `/asset-correlation` → `frontend/src/pages/AssetCorrelation.tsx`
+- `/dtale-analysis` → `frontend/src/pages/DTaleAnalysis.tsx`
+
+<Callout kind="tip">
+
+If a new Analysis screen does not appear in the UI, verify that you added both the sidebar item in `Sidebar.tsx` and the corresponding `Route` entry in `App.tsx`.
+
+</Callout>
+
+### Quick links to core screens
+
+Use these shortcuts when you are working on a specific Analysis view.
+
+<Columns cols={3}>
+
+<Card title="Technical Analysis Hub" href="/analysis-tab#technical-analysis-hub" icon="bar-chart" cta="View details" />
+
+<Card title="Technical Snapshots" href="/analysis-tab#technical-snapshots" icon="monitor" cta="View details" />
+
+<Card title="Fundamental Analysis" href="/analysis-tab#fundamental-analysis" icon="database" cta="View details" />
+
+</Columns>
+
+<Columns cols={3}>
+
+<Card title="Economic Calendar" href="/analysis-tab#economic-calendar" icon="calendar" cta="View details" />
+
+<Card title="Macro Analysis" href="/analysis-tab#macro-analysis" icon="cloud" cta="View details" />
+
+<Card title="Sector Analysis" href="/analysis-tab#sector-analysis" icon="folder" cta="View details" />
+
+</Columns>
+
+<Columns cols={3}>
+
+<Card title="Asset Correlation" href="/analysis-tab#asset-correlation" icon="code" cta="View details" />
+
+<Card title="DTale Analysis" href="/analysis-tab#dtale-analysis" icon="terminal" cta="View details" />
+
+</Columns>
+
+## How to use the Analysis tab
+
+This workflow shows how a typical user moves through the Analysis views and where you should look when extending behavior.
+
+<Steps>
+
+<Step title="Open the Analysis navigation group" icon="chevron-right">
+
+From the main application shell, expand the **ANALYSIS** group in the sidebar.
+
+- Confirm the group label is visible and expands correctly.
+- If the group does not persist between reloads, inspect the `sidebar-expanded-sections` entry in `localStorage`.
+
+</Step>
+
+<Step title="Choose a specific analysis view" icon="arrow-right">
+
+Select a route based on the type of insight you want to inspect.
+
+- Use **Technical Analysis Hub** or **Technical Snapshots** for chart- and indicator-driven insights.
+- Use **Fundamental Analysis**, **Macro Analysis**, **Sector Analysis**, and **Economic Calendar** for economic and company-level signals.
+- Use **Asset Correlation** or **DTale Analysis** for more advanced, cross-asset or data-frame exploration.
+
+</Step>
+
+<Step title="Trace data flow for debugging or extension" icon="code">
+
+When you need to modify behavior:
+
+- Start at the page component under `frontend/src/pages`.
+- Follow imports into `frontend/src/services` to locate data-fetching code.
+- Check environment variables such as `VITE_API_URL` for the base backend URL, and confirm the specific path segments and query parameters in the service function.
+
+</Step>
+
+</Steps>
+
+<Callout kind="alert">
+
+Analysis pages do not appear to call `/api/v1` endpoints directly. Instead, they rely on shared service modules that likely use a generic `/api` prefix with a base URL from `VITE_API_URL`. Confirm the actual backend routes by inspecting the relevant page and service files rather than assuming a fixed prefix.
+
+</Callout>
+
+## Core screens
+
+Each subsection below summarizes one Analysis route, the owning React page file, and the likely data sources at a high level. Use these as entry points when you are changing analytics logic or debugging data issues.
+
+### Technical Analysis Hub
+
+- **Route:** `/technical-analysis-hub`
+- **Page file:** `frontend/src/pages/TechnicalAnalysisHub.tsx`
+
+Technical Analysis Hub serves as a landing space for chart-based and indicator-driven signals. Expect this page to aggregate technical indicators, patterns, or signals across supported instruments, possibly using shared hooks or services that call the backend under a path derived from the generic `/api` base.
+
+When extending this hub, look for:
+
+- Imports from shared charting components and indicator utilities.
+- Service calls in `frontend/src/services` that fetch indicators, patterns, or scores for multiple symbols.
+
+### Technical Snapshots
+
+- **Route:** `/technical-snapshots`
+- **Page file:** `frontend/src/pages/TechnicalSnapshots.tsx`
+
+Technical Snapshots likely present a concise, table-style or card-style summary of current technical conditions for a list of assets. The page typically calls a service that returns snapshot data (trend, momentum, support/resistance levels) in a single payload.
+
+For maintenance:
+
+- Trace how filters (symbol, timeframe, exchange) propagate into the service layer.
+- Confirm snapshot refresh behavior and any polling or manual refresh logic.
+
+### Fundamental Analysis
+
+- **Route:** `/fundamental-analysis`
+- **Page file:** `frontend/src/pages/FundamentalAnalysis.tsx`
+
+Fundamental Analysis focuses on company or instrument fundamentals such as earnings, valuation ratios, and balance sheet metrics. The page uses shared service modules to query backend endpoints that likely join or transform external fundamental feeds.
+
+When working on this view:
+
+- Inspect how the page structures sections (overview, valuation, profitability, etc.).
+- Follow the imports into `frontend/src/services` to locate functions that call the fundamentals backend and map responses into the UI model.
+
+### Economic Calendar
+
+- **Route:** `/economic-calendar`
+- **Page file:** `frontend/src/pages/EconomicCalendar.tsx`
+
+Economic Calendar displays upcoming and historical macroeconomic events such as interest rate decisions, inflation prints, and employment reports. This page will typically:
+
+- Call a calendar or events service to fetch time-ordered events within a date range.
+- Offer filters by country, event importance, or category.
+
+Review the page and its service dependencies to understand:
+
+- How timezone handling and date ranges are implemented.
+- Whether events stream from an internal microservice or a proxied third-party provider behind the generic `/api` layer.
+
+### Macro Analysis
+
+- **Route:** `/macro-analysis`
+- **Page file:** `frontend/src/pages/MacroAnalysis.tsx`
+
+Macro Analysis aggregates higher-level economic indicators into dashboards or charts (for example, growth, inflation, rates, risk sentiment). It usually combines multiple time series into a single layout.
+
+To modify behavior:
+
+- Look for chart components and selector controls (country, region, indicator group).
+- Identify which service functions fetch macro time series and how they resolve base URLs via `VITE_API_URL`.
+
+### Sector Analysis
+
+- **Route:** `/sector-analysis`
+- **Page file:** `frontend/src/pages/SectorAnalysis.tsx`
+
+Sector Analysis compares performance or risk metrics across market sectors or industries. The page commonly renders grouped charts or tables keyed by sector.
+
+Key implementation points:
+
+- The page may fetch sector-level aggregates (returns, volatility, flows) from a dedicated sector service.
+- Filters such as time window or benchmark index likely map directly to query parameters in the service layer.
+
+When debugging:
+
+- Check how sector identifiers are constructed and passed to the backend.
+- Verify that color schemes and legends remain in sync with the sector identifiers returned by the API.
+
+### Asset Correlation
+
+- **Route:** `/asset-correlation`
+- **Page file:** `frontend/src/pages/AssetCorrelation.tsx`
+
+Asset Correlation visualizes relationships among assets, often via matrices or heatmaps of correlation coefficients. This screen typically:
+
+- Accepts a basket of symbols and a lookback period.
+- Calls a correlation or statistics service that returns pairwise correlation values.
+
+For changes:
+
+- Inspect how symbol sets are selected (manual input, watchlists, or predefined baskets).
+- Follow service calls that compute or fetch correlation data, and confirm how the UI maps values to color scales.
+
+### DTale Analysis
+
+- **Route:** `/dtale-analysis`
+- **Page file:** `frontend/src/pages/DTaleAnalysis.tsx`
+
+DTale Analysis integrates with DTale or a similar data-frame exploration tool to let users drill into underlying datasets used across the trading app. This page often acts as an iframe or bridge into a DTale instance running alongside the main backend.
+
+Implementation details to review:
+
+- How the app composes the DTale URL from configuration or environment variables.
+- Any authentication or token passing needed for the embedded data-frame explorer.
+- How the page handles loading state and errors if the DTale backend is unavailable.
+
+<Callout kind="info">
+
+Because Analysis screens rely on shared service modules and environment-driven base URLs rather than hard-coded `/api/v1` paths, always trace actual imports and function calls inside `frontend/src/pages` and `frontend/src/services` when you add new fields or debug data issues.
+
+</Callout>
+
+## Related docs
+
+Use these pages to understand how the Analysis tab fits into the broader product and backend integration story.
+
+<Columns cols={3}>
+
+<Card
+  title="Forex tab guide"
+  href="/forex-tab"
+  icon="bar-chart"
+  cta="See FX-specific workflows"
+>
+
+Learn how the Forex tab is wired, including its routes, TradingView integration, and backend data flow. The patterns are similar to the Analysis tab.
+
+</Card>
+
+<Card
+  title="Integrations"
+  href="/integrations"
+  icon="plug"
+  cta="Review external services"
+/>
+
+<Card
+  title="Features"
+  href="/features"
+  icon="file-text"
+  cta="Explore core capabilities"
+/>
+
+</Columns>
